@@ -5,48 +5,48 @@ Ima::DBI - Database connection caching and organization
 
 =head1 SYNOPSIS
 
-	# Class-wide methods.
-	__PACKAGE__->set_db($db_name, $data_source, $user, $password);
-	__PACKAGE__->set_db($db_name, $data_source, $user, $password, \%attr);
-	
-	__PACKAGE__->set_sql($sql_name, $statement, $db_name);
-	
-	# Object methods.
-	$dbh = $obj->db_*;		# Where * is the name of the db connection.
-	$sth = $obj->sql_*;		# Where * is the name of the sql statement.
-	
-	$rc = $obj->commit;             #UNIMPLEMENTED
-	$rc = $obj->commit(@db_names);  #UNIMPLEMENTED
-	
-	$rc = $obj->rollback;            #UNIMPLEMENTED
-	$rc = $obj->rollback(@db_names); #UNIMPLEMENTED
-	
-	$obj->clear_db_cache;            #UNIMPLEMENTED
-	$obj->clear_db_cache(@db_names); #UNIMPLEMENTED
-	
-	$obj->clear_sql_cache;             #UNIMPLMENTED
-	$obj->clear_sql_cache(@sql_names); #UNIMPLMENTED
-	
-	$obj->DBIwarn;
-	
+    # Class-wide methods.
+    __PACKAGE__->set_db($db_name, $data_source, $user, $password);
+    __PACKAGE__->set_db($db_name, $data_source, $user, $password, \%attr);
+    
+    __PACKAGE__->set_sql($sql_name, $statement, $db_name);
+    
+    # Object methods.
+    $dbh = $obj->db_*;      # Where * is the name of the db connection.
+    $sth = $obj->sql_*;     # Where * is the name of the sql statement.
+    
+    $rc = $obj->commit;             #UNIMPLEMENTED
+    $rc = $obj->commit(@db_names);  #UNIMPLEMENTED
+    
+    $rc = $obj->rollback;            #UNIMPLEMENTED
+    $rc = $obj->rollback(@db_names); #UNIMPLEMENTED
+    
+    $obj->clear_db_cache;            #UNIMPLEMENTED
+    $obj->clear_db_cache(@db_names); #UNIMPLEMENTED
+    
+    $obj->clear_sql_cache;             #UNIMPLMENTED
+    $obj->clear_sql_cache(@sql_names); #UNIMPLMENTED
+    
+    $obj->DBIwarn;
+    
     $dbh->clear_cache;  #UNIMPLEMENTED
-	
-	# Modified statement handle methods.
-	$rv = $sth->execute;
-	$rv = $sth->execute(@bind_values);
-	$rv = $sth->execute(\@bind_values, \@bind_cols);
+    
+    # Modified statement handle methods.
+    $rv = $sth->execute;
+    $rv = $sth->execute(@bind_values);
+    $rv = $sth->execute(\@bind_values, \@bind_cols);
 
-	$row_ref = $sth->fetch;
-	@row	 = $sth->fetch;
-	
-	$row_ref = $sth->fetch_hash;
-	%row	 = $sth->fetch_hash;
-	
-	$rows_ref = $sth->fetchall;
-	@rows	  = $sth->fetchall;
+    $row_ref = $sth->fetch;
+    @row     = $sth->fetch;
+    
+    $row_ref = $sth->fetch_hash;
+    %row     = $sth->fetch_hash;
+    
+    $rows_ref = $sth->fetchall;
+    @rows     = $sth->fetchall;
 
-	$rows_ref = $sth->fetchall_hash;
-	@tbl	  = $sth->fetchall_hash;
+    $rows_ref = $sth->fetchall_hash;
+    @tbl      = $sth->fetchall_hash;
 
     $sth->clear_cache;  #UNIMPLEMENTED
 
@@ -88,11 +88,11 @@ This gives you a cleaner OO design, since you can now just throw around the obje
 =item * Honors taint mode
 
 It always struck me as a design deficiency that tainted SQL statements could be passed to $sth->prepare().  For example:
-	
-	# $user is from an untrusted source and is tainted.
-	$user = get_user_data_from_the_outside_world;
-	$sth = $dbh->prepare('DELETE FROM Users WHERE User = $user');
-	
+    
+    # $user is from an untrusted source and is tainted.
+    $user = get_user_data_from_the_outside_world;
+    $sth = $dbh->prepare('DELETE FROM Users WHERE User = $user');
+    
 Looks innocent enough... but what if $user was the string "1 OR User LIKE %".  You just blew away all your users, hope you have backups.
 
 Using taint mode can prevent this problem, but DBI does not honor taint since all of its system calls are done inside XS code.  So, Ima::DBI manually checks to see if a given SQL statement is tainted before passing it on to prepare.

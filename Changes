@@ -1,27 +1,50 @@
-Revision history for Perl extension DBI::Ima.
+Revision history for Perl extension Ima::DBI.
+0.17  Tue Feb 29 00:13:32 EST 2000
+    * set_sql() and sql_*() will now deal with dynamic SQL statements much
+      better.
+    - Fixed up the docs a bit.
+    - execute() no longer checks for taintedness on bind parameters.
+
+0.16  1999/12/29 06:37:03
+    * Added a real DBIwarn()
+    - Never released to CPAN.
+
+0.15  1999/12/14 23:33:37
+    - Minor efficiency improvement of set_db().
+    - Minor adjustment to set_sql() so that the generated method calls
+      db_*() internaly instead of holding the $dbh inside the closure.
+      This allows subclasses to override the db_*() for that particular
+      sql method (needed for Class::DBI)
+
+0.14  1999/12/08 00:56:58
+    * fetchall_hash() was incorrectly coded as fetchall_hashref().
+
+0.13  1999/09/26 21:53:27
+    * DBI::st::bind_columns() was being called improperly
+
 0.12  Mon Sep 20 18:04:58 EDT 1999
-	- Fixed that damned pod2man warning about "Unmatched =back" (thanks Addi)
-	- Lowered the restrictions on execute() to allow execute(undef, \@cols)
+    - Fixed that damned pod2man warning about "Unmatched =back" (thanks Addi)
+    - Lowered the restrictions on execute() to allow execute(undef, \@cols)
 
 0.11  Tue Jul 20 22:08:35 EDT 1999
-	- Added prepare() override to return Ima::DBI style statement handles.
+    - Added prepare() override to return Ima::DBI style statement handles.
 
 0.10  Mon Jul 19 20:04:04 EDT 1999
-	- Updated TODO list
-	- Added COPYRIGHT and licensing
-	- Performance improvement by drastically reducting # of calls to
-	  DBI::prepare_cached
+    - Updated TODO list
+    - Added COPYRIGHT and licensing
+    - Performance improvement by drastically reducting # of calls to
+      DBI::prepare_cached
 
 0.09  Tue Jul 13 23:59:56 EDT 1999
-	- Major performance improvement by drasticly reducing # of calls to
-	  DBI::connect_cached.
+    - Major performance improvement by drasticly reducing # of calls to
+      DBI::connect_cached.
 
 0.08  Wed Jun 30 16:16:16 EDT 1999
-	* Spaces in names of statements and database (sql_ and db_) are now
-	  translate to underscores.
+    * Spaces in names of statements and database (sql_ and db_) are now
+      translate to underscores.
 
 0.07  Tue May 19 20:58:02 EDT 1999
-	- Cleaning up use of DBI's tainting features.
+    - Cleaning up use of DBI's tainting features.
 
 0.06  Sat May  8 03:50:34 EDT 1999
     - Implements data tainting via DBI->{Taint}  (Thanks, Tim!)

@@ -10,7 +10,7 @@ use vars qw($VERSION);
 BEGIN { $VERSION = 0.03; }
 
 @EXPORT = qw(SUCCESS FAILURE TRUE FALSE YES NO ERROR UNUSED
-			 _taint_check _unimplemented _taint_these _taint_this);
+             _taint_check _unimplemented _taint_these _taint_this);
 
 use constant SUCCESS => 1;
 use constant FAILURE => 0;
@@ -24,20 +24,20 @@ use constant UNUSED  => undef;  # the return value of is unused.
 # NOT rigourous enough.
 # Mostly unncessary due to DBI's new Taint syntax.
 sub _taint_check {
-	unless(eval { () = join('',@_), kill 0; 1; }) {
-		croak "Insecure dependency";
-	}
-	return UNUSED;
+    unless(eval { () = join('',@_), kill 0; 1; }) {
+        croak "Insecure dependency";
+    }
+    return UNUSED;
 }
 
 sub _unimplemented {
-	carp 'This function is unimplemented at this time.';
-	return UNUSED;
+    carp 'This function is unimplemented at this time.';
+    return UNUSED;
 }
 
 
 sub _taint_these {
-	map { _taint_this($_) } @_;
+    map { _taint_this($_) } @_;
 }
 
 
@@ -50,11 +50,11 @@ sub _taint_this ($) {
 
     local $@ = $Evil;
     if( ref $data ) {
-		eval { die $data };
-		$data = $@;
+        eval { die $data };
+        $data = $@;
     }
     else {
-		$data .= $Evil;
+        $data .= $Evil;
     }
 
     return $data;
