@@ -1,39 +1,25 @@
 Revision history for Perl extension DBI::Ima.
 
+0.05  Tue May  4 22:08:56 EDT 1999
+    * code for tainting fetched data added
+    - taint check repaired, but still incomplete.
+    - manual tainting repaired, but still incomplete.
+
+0.04  Mon May  3 22:14:02 EDT 1999
+    - tests added
+    - parts still imcomplete
+    - usable, I guess.
+
+0.04pre  Fri Apr 30 20:10:38 EDT 1999
+    * PRE RELEASE, UNTESTED
+    * Complete re-write from the ground up.
+    * Major API changes.  See docs.
+    * taint added
+    * Requires DBI 1.06
+    * Parts still incomplete
+
+0.03    I forget
+    * BROKEN BROKEN BROKEN!
+
 0.01  Fri Apr  3 19:19:48 1998
-	- original version; created by h2xs 1.18
-
-RCS file: /home/schwern/work/perl/DBI/Ima.pm,v
-Working file: Ima.pm
-head: 1.2
-branch:
-locks: strict
-access list:
-symbolic names:
-keyword substitution: kv
-total revisions: 2;	selected revisions: 2
-description:
-----------------------------
-revision 1.2
-date: 1998/04/04 00:28:41;  author: schwern;  state: Exp;  lines: +71 -30
-sql_* closures now use the $Statements{$name}{'sth'} to hold individual
-object's statement handles, using the $self reference as a key.  This is a
-hack, but Perl's OO requires hacks to avoid key collisions with sub classes.
-(Thanks Roderick)
-
-sql_* accidentally accepted (but did nothing with) an argument.  Fixed.
-
-Naming of the closure was incorrectly done.  Fixed.
-
-SYNOPSIS errors fixed.
-
-L<> flakiness fixed, and other little POD quirks.  Fixed.
-
-DBI::Ima::sth::_getDBH() will silently ignore named connections which have
-not yet been connected (no $dbh defined).  Should this toss a warning?
-
-DBI::Ima::_connect() forgot to pull $self out of @_.  Silly me.  Fixed.
-----------------------------
-revision 1.1
-date: 1998/04/03 18:31:31;  author: schwern;  state: Exp;
-Initial revision
+    - original version; created by h2xs 1.18

@@ -1,5 +1,8 @@
 Changes
 DBI.pm
 MANIFEST
+README
+INSTALL
 Makefile.PL
 test.pl
+lib/Ima/DBI/utility.pm
