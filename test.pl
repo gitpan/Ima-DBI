@@ -14,7 +14,6 @@ print "ok 1\n";
 ######################### End of black magic.
 
 
-
 package My::DBI;
 
 use base qw(Ima::DBI);
@@ -42,6 +41,7 @@ ok(__PACKAGE__->can('db_test2'));
 __PACKAGE__->set_sql('test1', 'select foo from bar where yar = ?', 'test1');
 __PACKAGE__->set_sql('test2', 'select mode,size,name from ?', 'test2');
 __PACKAGE__->set_sql('test3', 'select %s from ?', 'test1');
+__PACKAGE__->set_sql('test4', 'select %s from ?', 'test1', 0);
 ok(__PACKAGE__->can('sql_test1'));
 ok(__PACKAGE__->can('sql_test2'));
 ok(__PACKAGE__->can('sql_test3'));
@@ -81,6 +81,20 @@ ok( !$@ ); # Make sure fetch_hash() doesn't blow up at the end of its fetching
 $sth = $obj->sql_test3(join ',', qw(mode size name));
 ok( $sth->isa('Ima::DBI::st') );
 
+my $new_sth = $obj->sql_test3(join ',', qw(mode size name));
+ok( $new_sth eq $sth,                           'cached handles' );
+
+$new_sth = $obj->sql_test3(join ', ', qw(mode name));
+ok( $new_sth ne $sth,                           'redefined statement' );
+
+$sth = $obj->sql_test4(join ',', qw(mode size name));
+ok( $sth->isa('Ima::DBI::st') );
+
+my $new_sth = $obj->sql_test4(join ',', qw(mode size name));
+ok( $new_sth->isa('Ima::DBI::st') );
+ok( $new_sth ne $sth,                           'cached handles off' );
+
+
 # Same as before.
 # Test execute & fetch
 use Cwd;
@@ -96,6 +110,6 @@ $sth->finish;
 
 BEGIN {
     use vars qw($tests);  
-    $tests = 16;
+    $tests = 21;
     print "1..$tests\n";
 }

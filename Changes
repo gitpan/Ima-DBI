@@ -1,4 +1,19 @@
 Revision history for Perl extension Ima::DBI.
+0.21  Thu Apr 20 14:36:17 EDT 2000
+    - Added a new caching argument to set_sql()
+    - Removed the assert() using a 5.005 feature to keep things 5.004
+      clean.
+
+0.20  Wed Apr 19 20:46:57 EDT 2000
+    - set_sql() required its database method to have been declared previous
+      to it being called.  This turns out to be unnecessary and gets in
+      the way of writing a virtual base class which defines statements
+      but not the database connection.
+
+0.19  Wed Apr 12 23:18:48 EST 2000
+    - Now using DBI->init_rootclass to pull off DBI subclassing.  This
+      means subclasses of Ima::DBI should always get Ima::DBI::st and
+      Ima::DBI::db objects no matter what they pull.
 
 0.18  Thu Mar 16 16:04:11 EST 2000
     * Ooops, bug in fetch_hash() in list context.

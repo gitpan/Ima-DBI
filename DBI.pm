@@ -6,11 +6,15 @@ use Carp;
 use Carp::Assert;
 use Ima::DBI::utility;
 
-use vars qw($VERSION);
+use vars qw($VERSION @ISA);
 
 BEGIN {
-    $VERSION = '0.18';
+    $VERSION = '0.21';
+    @ISA = qw(DBI);
 }
+
+# Magical subclassing magic off DBI.
+__PACKAGE__->init_rootclass;
 
 
 =pod
@@ -27,6 +31,7 @@ Ima::DBI - Database connection caching and organization
     __PACKAGE__->set_db($db_name, $data_source, $user, $password, \%attr);
     
     __PACKAGE__->set_sql($sql_name, $statement, $db_name);
+    __PACKAGE__->set_sql($sql_name, $statement, $db_name, $cache);
 
     
     # Object methods.
@@ -332,8 +337,7 @@ sub _mk_db_closure {
     my $dbh;
     return sub {
           unless( $dbh && $dbh->FETCH('Active') && $dbh->ping ) {
-	      $dbh = DBI->connect_cached(@connection);
-	      bless $dbh, 'Ima::DBI::db';
+	      $dbh = Ima::DBI->connect_cached(@connection);
 	  }
             
 	  return $dbh;
@@ -346,13 +350,22 @@ sub _mk_db_closure {
 =item B<set_sql>
 
     __PACKAGE__->set_sql($sql_name, $statement, $db_name);
+    __PACKAGE__->set_sql($sql_name, $statement, $db_name, $cache);
 
 This method is used in place of DBI->prepare to create your statement
 handles.
 
 Sets up a new statement handle using associated to $sql_name using the
 database connection associated with $db_name.  $statement is passed
-through to DBI->prepare_cached to create the statement handle.
+through to either DBI->prepare or DBI->prepare_cached (depending on
+$cache) to create the statement handle.
+
+If $cache is true or isn't given then prepare_cached() will be used to
+prepare the statement handle and it will be cached.  If $cache is
+false then a normal prepare() will be used and the statement handle
+will be recompiled on every sql_*() call.  If you have a statement
+which changes alot or is used very infrequently you might not want it
+cached.
 
 A new method is created for each statement you set up.  This new
 method is sql_$sql_name... so, as with set_db,
@@ -372,8 +385,9 @@ details.
 =cut
 
 sub set_sql {
-    my($class, $sql_name, $statement, $db_name) = @_;
-    
+    my($class, $sql_name, $statement, $db_name, $cache) = @_;
+    $cache = YES unless defined $cache;
+
     # DBI will take care of the rest better than I can.
     _taint_check($class, $sql_name, $db_name);
     
@@ -381,9 +395,6 @@ sub set_sql {
     my $db_meth = $db_name;
     $db_meth =~ s/\s/_/g;
     $db_meth = "db_$db_meth";
-    $class->can($db_meth) or
-      die "There is no database connection named '$db_name' ".
-	  "defined in $class";
 
     my $sql_meth = $sql_name;
     $sql_meth =~ s/\s/_/g;
@@ -391,14 +402,14 @@ sub set_sql {
     
     no strict 'refs';
     *{$class."::$sql_meth"} = 
-      $class->_mk_sql_closure($sql_name, $statement, $db_meth);
+      $class->_mk_sql_closure($sql_name, $statement, $db_meth, $cache);
 
     return SUCCESS;
 }
 
 
 sub _mk_sql_closure {
-    my($class, $sql_name, $statement, $db_meth) = @_;
+    my($class, $sql_name, $statement, $db_meth, $cache) = @_;
 
     my $sth;
     return sub {
@@ -409,15 +420,17 @@ sub _mk_sql_closure {
 
         # Calling prepare_cached over and over again is also expensive.
         # Again, we co-opt some of prepare_cached's functionality.
-        if ( !$sth ) {  # No $sth defined yet.
+        if ( !$sth or @_ ) {  # No $sth defined yet.
             # Maybe I can do this at compile-time.
             my $sql = '';
             if( @_ ) {
                 # Make sure we got something that looks like a 
                 # sprintf() string.
-                assert( do { my $count = 0;
-                             $count = () = $statement =~ m/(?<!%)%[^%]/g;
-                             $count == @_ } ) if DEBUG;
+                # XXX This is the only thing that uses a 5.005 feature
+                # XXX so I'm eliminating it.
+#                 assert( do { my $count = 0;
+#                              $count = () = $statement =~ m/(?<!%)%[^%]/g;
+#                              $count == @_ } ) if DEBUG;
                 
                 $sql = sprintf($statement, @_);
             }
@@ -425,15 +438,12 @@ sub _mk_sql_closure {
                 $sql = $statement;
             }
 
-            # Need to make caching an option.
-            unless( @_) {
+            if( $cache ) {
                 $sth = $dbh->prepare_cached($sql);
             }
             else {
                 $sth = $dbh->prepare($sql);
             }
-
-            bless $sth, 'Ima::DBI::st';
         }
         else {          # $sth defined.
             # Check to see if the handle is active.
@@ -608,24 +618,6 @@ use base qw(DBI::db);  # Uhh, I think that's right.
 =pod
 
 =over 4
-
-=item B<prepare>
-
-   $sth = $dbh->prepare(...);
-
-Acts just like DBI's prepare except that it returns an Ima::DBI::st
-object.  Eventually, all database handle methods which return a
-statement handle will return an Ima::DBI::st.
-
-=cut
-
-sub prepare {
-   my ($self) = shift;
-   my $sth = $self->SUPER::prepare(@_);
-   bless $sth, "Ima::DBI::st";
-}
-
-=pod
 
 =item B<commit>         *UNIMPLEMENTED*
 
@@ -947,17 +939,10 @@ sub fetchall_hash {
 
 =over 4
 
-=item Ima::DBI::st has to remplace DBI::st where applicable.
+=item Using undocumented features of DBI
 
-   $sth = $obj->db_foo->prepare(...);
-   @rows = $sth->fetchall;
-
-This won't work because $sth is, surprisingly, not an Ima::DBI::st object.
-I need to make sure things like this don't happen.  For now I'll do it on
-a case-by-case basis.
-
-I could do some autoloading tricks to make this work in all cases, but
-I don't know what performance impact this will have.
+Using DBI->init_rootclass to pull of subclassing.  This is currently
+an undocumented method (this should change soon).
 
 =item Unstable Interface
 
