@@ -7,7 +7,7 @@
 # (It may become useful if the test is moved to ./t subdirectory.)
 
 END {print "not ok 1\n" unless $loaded;}
-use Ima::DBI 0.16;
+use Ima::DBI;
 $loaded = 1;
 print "ok 1\n";
 
@@ -90,7 +90,7 @@ ok( $new_sth ne $sth,                           'redefined statement' );
 $sth = $obj->sql_test4(join ',', qw(mode size name));
 ok( $sth->isa('Ima::DBI::st') );
 
-my $new_sth = $obj->sql_test4(join ',', qw(mode size name));
+$new_sth = $obj->sql_test4(join ',', qw(mode size name));
 ok( $new_sth->isa('Ima::DBI::st') );
 ok( $new_sth ne $sth,                           'cached handles off' );
 
@@ -98,18 +98,23 @@ ok( $new_sth ne $sth,                           'cached handles off' );
 # Same as before.
 # Test execute & fetch
 use Cwd;
-my $dir = cwd();
-my($col0, $col1, $col2);
+$dir = cwd();
 $sth->execute([$dir], [\($col0, $col1, $col2)]);
-my(@row_a) = $sth->fetch;
+@row_a = $sth->fetch;
 ok($row_a[0] eq $col0);
 ok($row_a[1] eq $col1);
 ok($row_a[2] eq $col2);
 $sth->finish;
 
+eval {
+    Ima::DBI->i_dont_exist;
+};
+# There's some odd precedence problem trying to pass this all at once.
+my $ok = $@ =~ /^Can\'t locate object method "i_dont_exist" via package/;
+ok( $ok, 'Accidental AutoLoader inheritance blocked' );
 
 BEGIN {
     use vars qw($tests);  
-    $tests = 21;
+    $tests = 22;
     print "1..$tests\n";
 }

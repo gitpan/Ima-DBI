@@ -4,13 +4,17 @@ use strict;
 use DBI;
 use Carp;
 use Carp::Assert;
+require Class::WhiteHole;
 use Ima::DBI::utility;
 
 use vars qw($VERSION @ISA);
 
 BEGIN {
-    $VERSION = '0.21';
-    @ISA = qw(DBI);
+    $VERSION = '0.23';
+
+    # We accidentally inherit AutoLoader::AUTOLOAD from DBI.  Send it to
+    # the white hole.
+    @ISA = qw(Class::WhiteHole DBI);
 }
 
 # Magical subclassing magic off DBI.
@@ -448,8 +452,8 @@ sub _mk_sql_closure {
         else {          # $sth defined.
             # Check to see if the handle is active.
             if( $sth->FETCH('Active') ) {
-                Carp::croak("'$sql_name' statement handle is still ".
-                            "active!  Finishing for you.");
+                Carp::carp("'$sql_name' statement handle is still ".
+                           "active!  Finishing for you.");
                 $sth->finish;
             }
         }

@@ -20,8 +20,9 @@ WriteMakefile(
           'NAME'        => 'Ima::DBI',
           'VERSION_FROM'  => 'DBI.pm', # finds $VERSION
           'PREREQ_PM'  => { DBI => 1.09,
-                            Carp::Assert => 0.05,
-                            Carp => 0,
+                            Carp::Assert        => 0.05,
+                            Carp                => 0,
+                            Class::WhiteHole    => 0.02,
                           },
           'dist'      =>   {COMPRESS => 'gzip -9',
                             SUFFIX   => '.gz',
