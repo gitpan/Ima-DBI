@@ -9,7 +9,7 @@ use Ima::DBI::utility;
 use vars qw($VERSION);
 
 BEGIN {
-    $VERSION = 0.14;
+    $VERSION = 0.15;
 }
 
 # Much of the real data about the handles is inside DBI.
@@ -295,6 +295,7 @@ Spaces in $db_name will be translated into underscores ('_')
 
 =cut
 
+#'#
 sub set_db {
     my($package, $db_name, $data_source, $user, $password, $attr) = @_;
     
@@ -313,17 +314,18 @@ sub set_db {
     my @connection = ($data_source, $user, $password, $attr);
 
     no strict 'refs';
-	$db_name =~ tr/ /_/;
+	$db_name =~ s/\s/_/g;
+	my $dbh;
     *{$package."::db_$db_name"} =
         sub {
             use strict 'refs';
 
-			# I could replace this with something like in set_sql, but
-			# I'd like to automagically benefit from connect_cached's
-			# future improvements.
-            my $dbh = DBI->connect_cached(@connection);
+			unless( $dbh && $dbh->FETCH('Active') && $dbh->ping ) {
+				$dbh = DBI->connect_cached(@connection);
+				bless $dbh, 'Ima::DBI::db';
+			}
             
-            return bless $dbh, 'Ima::DBI::db';
+            return $dbh;
         };
     # -------------------- end db_* closure --------------------------#
     
@@ -361,37 +363,39 @@ sub set_sql {
     _taint_check($package, $sql_name, $db_name);
     
     # ------------------------- sql_* closure ----------------------- #
-	my $orig_db_name = $db_name;
-	$db_name =~ tr/ /_/;
-    my $db  = $package->can("db_$db_name") or
-        die "There is no database connection named '$orig_db_name' defined in $package";
-	my $dbh;	# Database handle for the closure.
-	my $sth;	# Statement handle for the closure.
-    no strict 'refs';
-	$sql_name =~ tr/ /_/;
-    *{$package."::sql_$sql_name"} =
-        sub {
-			# Calling connect_cached every time is expensive, so
-			# we hang onto the dbh and co-opt some of connect_cached's
-			# functionality.
-			unless( $dbh && $dbh->FETCH('Active') && $dbh->ping ) {
-				$dbh = &$db;
+	my $db_meth = $db_name;
+	$db_meth =~ s/\s/_/g;
+	$db_meth = "db_$db_meth";
+    $package->can($db_meth) or
+	  die "There is no database connection named '$db_name' defined in $package";
 
-				# If the database connection died, we probably should
-				# reprepare.
-				$sth = $dbh->prepare_cached($statement);
-				bless $sth, 'Ima::DBI::st';
-			}
+	my $sql_meth = $sql_name;
+	$sql_meth =~ s/\s/_/g;
+	$sql_meth = "sql_$sql_name";
+
+	my $sth;	# Statement handle for the closure.
+
+    no strict 'refs';
+    *{$package."::$sql_meth"} =
+        sub {
+			my $class = shift;
+
+			# Must allow subclasses to override database connections.
+			my $dbh = $class->$db_meth();
+
 			# Calling prepare_cached over and over again is also expensive.
 			# Again, we co-opt some of prepare_cached's functionality.
-			elsif ( !$sth ) {	# No $sth defined yet.
+			if ( !$sth ) {	# No $sth defined yet.
 				$sth = $dbh->prepare_cached($statement);
 				bless $sth, 'Ima::DBI::st';
 			}
-			else {
+			else {			# $sth defined.
 				# Check to see if the handle is active.
-				Carp::croak("prepare_cached($statement) statement handle $sth is still active")
-				  if $sth->FETCH('Active');
+				if( $sth->FETCH('Active') ) {
+					Carp::croak("'$sql_name' statement handle is still ".
+								"active!  Finishing for you.");
+					$sth->finish;
+				}
 			}
 
 			return $sth;
