@@ -8,7 +8,7 @@ require Class::Data::Inheritable;
 use vars qw($VERSION @ISA);
 
 BEGIN {
-	$VERSION = '0.31';
+	$VERSION = '0.32';
 
 	# We accidentally inherit AutoLoader::AUTOLOAD from DBI.  Send it to
 	# the white hole.
@@ -393,9 +393,8 @@ sub set_sql {
 	$db_meth =~ s/\s/_/g;
 	$db_meth = "db_$db_meth";
 
-	my $sql_meth = $sql_name;
-	$sql_meth =~ s/\s/_/g;
-	$sql_meth = "sql_$sql_name";
+	(my $sql_meth = $sql_name) =~ s/\s/_/g;
+	$sql_meth = "sql_$sql_meth";
 
 	# Remember the name of this handle for the class.
 	my $handles = $class->__Statement_Names || [];
