@@ -1,7 +1,7 @@
 package Ima::DBI;
 
 use strict;
-use DBI 1.07;
+use DBI 1.08;
 use Carp;
 use Carp::Assert 0.05;
 use Ima::DBI::utility;
@@ -9,7 +9,7 @@ use Ima::DBI::utility;
 use vars qw($VERSION);
 
 BEGIN {
-    $VERSION = '0.06';
+    $VERSION = 0.08;
 }
 
 # Much of the real data about the handles is inside DBI.
@@ -133,7 +133,7 @@ This gives you a cleaner OO design, since you can now just throw
 around the object as usual and it will carry its associated DBI
 baggage with it.
 
-=item * Honors taint mode		* INCOMPLETE *
+=item * Honors taint mode
 
 It always struck me as a design deficiency that tainted SQL statements 
 could be passed to $sth->prepare().  For example:
@@ -145,14 +145,17 @@ could be passed to $sth->prepare().  For example:
 Looks innocent enough... but what if $user was the string "1 OR User LIKE %".
 You just blew away all your users, hope you have backups.
 
-Using taint mode can prevent this problem, but DBI does not honor
-taint since all of its system calls are done inside XS code.  So,
-Ima::DBI manually checks to see if a given SQL statement is tainted
-before passing it on to prepare.
+Ima::DBI turns on the DBI->connect Taint attribute so that all DBI
+methods will no longer accept tainted data.  See the DBI manpage for
+details.
 
-=item * Taints returned data	* INCOMPLETE *
+=item * Taints returned data
 
-Databases should be like any other system call.  Its the scary Outside World, thus it should be tainted.  Simp.  Ima::DBI turns on DBI's Taint attribute on each connection.  This feature is overridable by passing your own Taint attribute to set_db as normal for DBI.
+Databases should be like any other system call.  Its the scary Outside
+World, thus it should be tainted.  Simp.  Ima::DBI turns on DBI's
+Taint attribute on each connection.  This feature is overridable by
+passing your own Taint attribute to set_db as normal for DBI.  See
+"Taint" in the DBI man page for details.
 
 =item * Encapsulation of some of the more repetative bits of everyday DBI usage
 
@@ -246,13 +249,12 @@ Have a look at the L<EXAMPLE> below.
 
 =head1 TAINTING
 
-Ima::DBI, unlike DBI, honors taint mode.
+Ima::DBI, by default, uses DBI's Taint flag on all connections.
 
-For the time being it will be a sweeping thing, no Ima::DBI or
-Ima::DBI::st method will accept tainted data.  This may be relaxed in
-the future.  (This part is currently incomplete)
-
-In addition, Ima::DBI taints all data returned from the database via the DBI Taint attribute.
+This means that no Ima::DBI method will accept tainted data and all
+data fetched from the database will be tainted.  This may be different
+from the DBI behavior you're used to.  See "Taint" in the DBI man
+pages for details.
 
 =cut
 
@@ -286,24 +288,29 @@ If no %attr is supplied (RaiseError => 1, AutoCommit => 0, PrintError
 The actual database handle creation (and thus the database connection)
 is held off until a prepare is attempted with this handle.
 
+Spaces in $db_name will be translated into underscores ('_')
+
 =cut
 
 sub set_db {
     my($package, $db_name, $data_source, $user, $password, $attr) = @_;
     
-    _taint_check(@_);
+    # The rest will be delt with by DBI better than I can.
+    _taint_check($package, $db_name);
     
     assert(@_ >= 5 || @_ <= 6) if DEBUG;
     assert(!defined $attr or ref $attr eq 'HASH') if DEBUG;
     
     # Join the user's %attr with our defaults.
     $attr = {} unless defined $attr;
-    $attr = { RaiseError => 1, AutoCommit => 0, PrintError => 0, Taint => 1, %$attr };
+    $attr = { RaiseError => 1, AutoCommit => 0, PrintError => 0, Taint => 1, 
+	      %$attr };
     
     # ------------------------ db_* closure --------------------------#
     my @connection = ($data_source, $user, $password, $attr);
 
     no strict 'refs';
+	$db_name =~ tr/ /_/;
     *{$package."::db_$db_name"} =
         sub {
             use strict 'refs';
@@ -336,17 +343,22 @@ sql_bar() which uses the database connection from db_foo().
 The actual statement handle creation is held off until sql_* is first
 called on this name.
 
+Spaces in $sql_name will be translated into underscores ('_')
+
 =cut
 
 sub set_sql {
     my($package, $sql_name, $statement, $db_name) = @_;
     
-    _taint_check(@_);
+    # DBI will take care of the rest better than I can.
+    _taint_check($package, $sql_name, $db_name);
     
     # ------------------------- sql_* closure ----------------------- #
+	$db_name =~ tr/ /_/;
     my $db  = $package->can("db_$db_name") or
         die "There is no database connection named '$db_name' defined in $package";
     no strict 'refs';
+	$sql_name =~ tr/ /_/;
     *{$package."::sql_$sql_name"} =
         sub {
             my $sth = &$db->prepare_cached($statement);
@@ -592,8 +604,6 @@ must perform the bind_param, execute, bind_col sequence yourself.
 sub execute {
     my($sth) = shift;
     
-    _taint_check(@_);
-    
     my $rv;
     if( ref $_[0] eq 'ARRAY' && ref $_[1] eq 'ARRAY' ) {
         my($bind_params, $bind_cols) = @_;
@@ -794,8 +804,12 @@ works, so expect the worst, the interface will change.
 
 Ima::DBI uses DBI->connect_cached, an undocumented feature in DBI, to
 handle its cache to connections, just like prepare_cached does.
-Eventually this feature will mature, but right now (as of DBI 1.06)
+Eventually this feature will mature, but right now (as of DBI 1.08)
 its a little risky.
+
+Update: DBI 1.08 contained connect_cached fixes and was supposed to
+contain docs, but didn't.  I expect that to be rectified in the next
+DBI version.
 
 =item execute() extensions questionable
 
@@ -809,9 +823,7 @@ general, but I'd rather be too strict to start than be too lax and try
 to restrict later.  In the future, certain methods may accept tainted
 data.
 
-=item taint check incomplete
-
-My method of checking if something is tainted does not delve deep enough into a given data structure.  This only shows up in the two argument version of execute().
+This is now a joint issue between DBI and Ima::DBI.
 
 =item sql_* and db_* should take arguments
 
@@ -842,7 +854,9 @@ Michael G Schwern <schwern@pobox.com>
 
 =head1 THANKS TO
 
-    Tim Bunce, for enduring all my DBI questions.
+    Tim Bunce, for enduring all my DBI questions and adding Taint,
+        prepare_cached and connect_cached methods to DBI.  It simplified
+        my job greatly!
     Arena Networks, for effectively paying for me to write this module.
 
 

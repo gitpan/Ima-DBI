@@ -57,6 +57,7 @@ my(@row_a) = $sth->fetch;
 ok(0, $row_a[0] eq $col0);
 ok(0, $row_a[1] eq $col1);
 ok(0, $row_a[2] eq $col2);
+$sth->finish;
 
 # Test fetch_hash
 $sth = $obj->sql_test2;

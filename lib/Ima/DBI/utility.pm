@@ -7,7 +7,7 @@ use Carp::Assert;
 use base qw(Exporter);
 
 use vars qw($VERSION);
-BEGIN { $VERSION = 0.02; }
+BEGIN { $VERSION = 0.03; }
 
 @EXPORT = qw(SUCCESS FAILURE TRUE FALSE YES NO ERROR UNUSED
 			 _taint_check _unimplemented _taint_these _taint_this);
@@ -22,6 +22,7 @@ use constant ERROR   => -1;         # an error occured
 use constant UNUSED  => undef;  # the return value of is unused.
 
 # NOT rigourous enough.
+# Mostly unncessary due to DBI's new Taint syntax.
 sub _taint_check {
 	unless(eval { () = join('',@_), kill 0; 1; }) {
 		croak "Insecure dependency";
@@ -39,6 +40,8 @@ sub _taint_these {
 	map { _taint_this($_) } @_;
 }
 
+
+# Unncessary due to DBI's new Taint syntax.
 # Needs much work.  Needs to recurse into data structures.
 my $Evil = $0;
 $Evil =~ s/.*//;
@@ -56,6 +59,9 @@ sub _taint_this ($) {
 
     return $data;
 }
+
+
+
 
 
 
