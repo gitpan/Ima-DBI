@@ -9,7 +9,7 @@ use Ima::DBI::utility;
 use vars qw($VERSION);
 
 BEGIN {
-    $VERSION = 0.08;
+    $VERSION = 0.09;
 }
 
 # Much of the real data about the handles is inside DBI.
@@ -314,6 +314,10 @@ sub set_db {
     *{$package."::db_$db_name"} =
         sub {
             use strict 'refs';
+
+			# I could replace this with something like in set_sql, but
+			# I'd like to automagically benefit from connect_cached's
+			# future improvements.
             my $dbh = DBI->connect_cached(@connection);
             
             return bless $dbh, 'Ima::DBI::db';
@@ -357,11 +361,18 @@ sub set_sql {
 	$db_name =~ tr/ /_/;
     my $db  = $package->can("db_$db_name") or
         die "There is no database connection named '$db_name' defined in $package";
+	my $dbh;	# Database handle for the closure.
     no strict 'refs';
 	$sql_name =~ tr/ /_/;
     *{$package."::sql_$sql_name"} =
         sub {
-            my $sth = &$db->prepare_cached($statement);
+			# Calling connect_cached every time is expensive, so
+			# we hang onto the dbh and co-opt some of connect_cached's
+			# functionality.
+			unless( $dbh && $dbh->FETCH('Active') && $dbh->ping ) {
+				$dbh = &$db;
+			}
+            my $sth = $dbh->prepare_cached($statement);
             
             # This isn't the most pleasant thing in the universe to do.
             return bless $sth, 'Ima::DBI::st';

@@ -1,4 +1,15 @@
 Revision history for Perl extension DBI::Ima.
+0.09  Tue Jul 13 23:59:56 EDT 1999
+	- Major performance improvement by drasticly reducing # of calls to
+	  DBI::connect_cached.
+
+0.08  Wed Jun 30 16:16:16 EDT 1999
+	* Spaces in names of statements and database (sql_ and db_) are now
+	  translate to underscores.
+
+0.07  Tue May 19 20:58:02 EDT 1999
+	- Cleaning up use of DBI's tainting features.
+
 0.06  Sat May  8 03:50:34 EDT 1999
     - Implements data tainting via DBI->{Taint}  (Thanks, Tim!)
 
