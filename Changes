@@ -1,4 +1,12 @@
 Revision history for Perl extension Ima::DBI.
+0.25  Sun Apr  8 23:55:15 BST 2001
+    - Fixed a minor bug with %% in SQL
+    - Cleaned up the docs a bit
+    * Added db_names() and db_handles()
+    * Added sql_names()
+    * Implemented commit() and rollback()
+    - Fixed minor bug in assertion on set_db()
+
 0.24  Sun Sep 10 00:50:15 EDT 2000
     - *bug fix* commit() and rollback() were accidentally broken on
       database handles

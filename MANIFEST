@@ -4,5 +4,5 @@ MANIFEST
 README
 INSTALL
 Makefile.PL
-test.pl
+t/DBI.t
 lib/Ima/DBI/utility.pm

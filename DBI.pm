@@ -2,26 +2,28 @@ package Ima::DBI;
 
 use strict;
 use DBI;
-use Carp;
 use Carp::Assert;
 require Class::WhiteHole;
+require Class::Data::Inheritable;
 use Ima::DBI::utility;
 
 use vars qw($VERSION @ISA);
 
 BEGIN {
-    $VERSION = '0.24';
+    $VERSION = '0.25';
 
     # We accidentally inherit AutoLoader::AUTOLOAD from DBI.  Send it to
     # the white hole.
-    @ISA = qw(Class::WhiteHole DBI);
+    @ISA = qw(Class::WhiteHole DBI Class::Data::Inheritable);
 }
 
 # Magical subclassing magic off DBI.
-__PACKAGE__->init_rootclass;
+Ima::DBI->init_rootclass;
 
+# Some class data to store a per-class list of handles.
+Ima::DBI->mk_classdata('__Database_Names');
+Ima::DBI->mk_classdata('__Statement_Names');
 
-=pod
 
 =head1 NAME
 
@@ -30,14 +32,29 @@ Ima::DBI - Database connection caching and organization
 
 =head1 SYNOPSIS
 
-    # Class-wide methods.
-    __PACKAGE__->set_db($db_name, $data_source, $user, $password);
-    __PACKAGE__->set_db($db_name, $data_source, $user, $password, \%attr);
-    
-    __PACKAGE__->set_sql($sql_name, $statement, $db_name);
-    __PACKAGE__->set_sql($sql_name, $statement, $db_name, $cache);
+    package Foo;
+    require Ima::DBI;
+    @ISA = qw(Ima::DBI);
 
-    
+    # Class-wide methods.
+    Foo->set_db($db_name, $data_source, $user, $password);
+    Foo->set_db($db_name, $data_source, $user, $password, \%attr);
+
+    my @database_names   = Foo->db_names;
+    my @database_handles = Foo->db_handles;
+
+    Foo->set_sql($sql_name, $statement, $db_name);
+    Foo->set_sql($sql_name, $statement, $db_name, $cache);
+
+    my @statement_names   = Foo->sql_names;
+
+    Foo->clear_db_cache;                *UNIMPLEMENTED*
+    Foo->clear_db_cache(@db_names);     *UNIMPLEMENTED*
+
+    Foo->clear_sql_cache;               *UNIMPLEMENTED*
+    Foo->clear_sql_cache(@sql_names);   *UNIMPLEMENTED*
+
+
     # Object methods.
     $dbh = $obj->db_*;      # Where * is the name of the db connection.
     $sth = $obj->sql_*;     # Where * is the name of the sql statement.
@@ -47,36 +64,31 @@ Ima::DBI - Database connection caching and organization
 
 
     # Modified statement handle methods.
-    $rv = $sth->execute;
-    $rv = $sth->execute(@bind_values);
-    $rv = $sth->execute(\@bind_values, \@bind_cols);
+    my $rv = $sth->execute;
+    my $rv = $sth->execute(@bind_values);
+    my $rv = $sth->execute(\@bind_values, \@bind_cols);
 
     # In addition to the normal DBI sth methods...
-    $row_ref = $sth->fetch;
-    @row     = $sth->fetch;
-    
-    $row_ref = $sth->fetch_hash;
-    %row     = $sth->fetch_hash;
-    
-    $rows_ref = $sth->fetchall;
-    @rows     = $sth->fetchall;
+    my $row_ref = $sth->fetch;
+    my @row     = $sth->fetch;
 
-    $rows_ref = $sth->fetchall_hash;
-    @tbl      = $sth->fetchall_hash;
+    my $row_ref = $sth->fetch_hash;
+    my %row     = $sth->fetch_hash;
 
-    $rc = $obj->commit;             #UNIMPLEMENTED
-    $rc = $obj->commit(@db_names);  #UNIMPLEMENTED
-    
-    $rc = $obj->rollback;            #UNIMPLEMENTED
-    $rc = $obj->rollback(@db_names); #UNIMPLEMENTED
+    my $rows_ref = $sth->fetchall;
+    my @rows     = $sth->fetchall;
 
-    $sth->clear_cache;  #UNIMPLEMENTED
-    
-    $obj->clear_db_cache;            #UNIMPLEMENTED
-    $obj->clear_db_cache(@db_names); #UNIMPLEMENTED
-    
-    $obj->clear_sql_cache;             #UNIMPLMENTED
-    $obj->clear_sql_cache(@sql_names); #UNIMPLMENTED
+    my $rows_ref = $sth->fetchall_hash;
+    my @tbl      = $sth->fetchall_hash;
+
+    my $rc = $obj->commit;
+    my $rc = $obj->commit(@db_names);
+
+    my $rc = $obj->rollback;
+    my $rc = $obj->rollback(@db_names);
+
+    $dbh->clear_cache;  *UNIMPLEMENTED*
+    $sth->clear_cache;  *UNIMPLEMENTED*
 
 
 =head1 DESCRIPTION
@@ -234,8 +246,8 @@ YMMV.
 =item * Overkill for programs that only use their SQL statements once
 
 Ima::DBI's caching might prove to be an unecessary performance hog if
-you never use the same SQL statement twice (soon caching will become
-optional).  Not sure, I haven't looked into it.
+you never use the same SQL statement twice.  Not sure, I haven't
+looked into it.
 
 =back
 
@@ -246,19 +258,19 @@ The basic steps to "DBIing" a class are:
 
 =over 4
 
-=item 1 
+=item 1
 
 Inherit from Ima::DBI
 
-=item 2 
+=item 2
 
 Set up and name all your database connections via set_db()
 
-=item 3 
+=item 3
 
 Set up and name all your SQL statements via set_sql()
 
-=item 4 
+=item 4
 
 Use sql_* to retrieve your statement handles ($sth) as needed and db_*
 to retreive database handles ($dbh).
@@ -286,8 +298,8 @@ from the DBI behavior you're used to.  L<DBI/Taint> for details.
 
 =item B<set_db>
 
-    __PACKAGE__->set_db($db_name, $data_source, $user, $password);
-    __PACKAGE__->set_db($db_name, $data_source, $user, $password, \%attr);
+    Foo->set_db($db_name, $data_source, $user, $password);
+    Foo->set_db($db_name, $data_source, $user, $password, \%attr);
 
 This method is used in place of DBI->connect to create your database handles.
 
@@ -295,14 +307,14 @@ Sets up a new DBI database handle associated to $db_name.  All other
 arguments are passed through to DBI->connect_cached.
 
 A new method is created for each db you setup.  This new method is
-db_$db_name... so, for example, __PACKAGE__->set_db("foo", ...) will
+db_$db_name... so, for example, Foo->set_db("foo", ...) will
 create a method called db_foo().
 
-If no %attr is supplied (RaiseError => 1, AutoCommit => 0, PrintError
-=> 0) is assumed.  This is a better default IMHO, however it does give
-databases without transactions (such as MySQL) a hard time.  Be sure
-to turn AutoCommit back on if your database does not support
-transactions.
+%attr is combined with a set of defaults (RaiseError => 1, AutoCommit
+=> 0, PrintError => 0, Taint => 1).  This is a better default IMHO,
+however it does give databases without transactions (such as MySQL) a
+hard time.  Be sure to turn AutoCommit back on if your database does
+not support transactions.
 
 The actual database handle creation (and thus the database connection)
 is held off until a prepare is attempted with this handle.
@@ -314,24 +326,29 @@ Spaces in $db_name will be translated into underscores ('_')
 #'#
 sub set_db {
     my($class, $db_name, $data_source, $user, $password, $attr) = @_;
-    
+
     # The rest will be delt with by DBI better than I can.
     _taint_check($class, $db_name);
-    
-    assert(@_ >= 5 || @_ <= 6) if DEBUG;
+
+    assert(5 <= @_ && @_ <= 6) if DEBUG;
     assert(!defined $attr or ref $attr eq 'HASH') if DEBUG;
-    
+
     # Join the user's %attr with our defaults.
     $attr = {} unless defined $attr;
-    $attr = { RaiseError => 1, AutoCommit => 0, PrintError => 0, Taint => 1, 
+    $attr = { RaiseError => 1, AutoCommit => 0, PrintError => 0, Taint => 1,
               %$attr };
 
     $db_name =~ s/\s/_/g;
-    
+
+    # Remember the name of this handle for the class.
+    my $handles = $class->__Database_Names || [];
+    push @$handles, $db_name;
+    $class->__Database_Names($handles);
+
     no strict 'refs';
-    *{$class."::db_$db_name"} = 
+    *{$class."::db_$db_name"} =
       $class->_mk_db_closure($data_source, $user, $password, $attr);
-    
+
     return SUCCESS;
 }
 
@@ -343,7 +360,7 @@ sub _mk_db_closure {
           unless( $dbh && $dbh->FETCH('Active') && $dbh->ping ) {
 	      $dbh = Ima::DBI->connect_cached(@connection);
 	  }
-            
+
 	  return $dbh;
     };
 }
@@ -353,8 +370,8 @@ sub _mk_db_closure {
 
 =item B<set_sql>
 
-    __PACKAGE__->set_sql($sql_name, $statement, $db_name);
-    __PACKAGE__->set_sql($sql_name, $statement, $db_name, $cache);
+    Foo->set_sql($sql_name, $statement, $db_name);
+    Foo->set_sql($sql_name, $statement, $db_name, $cache);
 
 This method is used in place of DBI->prepare to create your statement
 handles.
@@ -373,7 +390,7 @@ cached.
 
 A new method is created for each statement you set up.  This new
 method is sql_$sql_name... so, as with set_db,
-__PACKAGE__->set_sql("bar", ..., "foo"); will create a method called
+Foo->set_sql("bar", ..., "foo"); will create a method called
 sql_bar() which uses the database connection from db_foo().
 
 The actual statement handle creation is held off until sql_* is first
@@ -383,8 +400,8 @@ Spaces in $sql_name will be translated into underscores ('_')
 
 To make up for the limitations of bind parameters, $statement can
 contain sprintf() style formatting (ie. %s and such) to allow
-dynamically generated SQL statements.  See sql_* below for more
-details.
+dynamically generated SQL statements (so to get a real percent sign,
+use '%%').  See sql_* below for more details.
 
 =cut
 
@@ -394,7 +411,7 @@ sub set_sql {
 
     # DBI will take care of the rest better than I can.
     _taint_check($class, $sql_name, $db_name);
-    
+
     # ------------------------- sql_* closure ----------------------- #
     my $db_meth = $db_name;
     $db_meth =~ s/\s/_/g;
@@ -403,7 +420,12 @@ sub set_sql {
     my $sql_meth = $sql_name;
     $sql_meth =~ s/\s/_/g;
     $sql_meth = "sql_$sql_name";
-    
+
+    # Remember the name of this handle for the class.
+    my $handles = $class->__Statement_Names || [];
+    push @$handles, $sql_name;
+    $class->__Statement_Names($handles);
+
     no strict 'refs';
     *{$class."::$sql_meth"} = 
       $class->_mk_sql_closure($sql_name, $statement, $db_meth, $cache);
@@ -427,20 +449,17 @@ sub _mk_sql_closure {
         if ( !$sth or @_ ) {  # No $sth defined yet.
             # Maybe I can do this at compile-time.
             my $sql = '';
-            if( @_ ) {
-                # Make sure we got something that looks like a 
-                # sprintf() string.
-                # XXX This is the only thing that uses a 5.005 feature
-                # XXX so I'm eliminating it.
-#                 assert( do { my $count = 0;
+            # Make sure we got something that looks like a 
+            # sprintf() string.
+            # XXX This is the only thing that uses a 5.005 feature
+            # XXX so I'm eliminating it.
+#                  assert( do { my $count = 0;
 #                              $count = () = $statement =~ m/(?<!%)%[^%]/g;
 #                              $count == @_ } ) if DEBUG;
-                
-                $sql = sprintf($statement, @_);
-            }
-            else {
-                $sql = $statement;
-            }
+
+            # Everything must pass through sprintf, regardless of if
+            # @_ is empty.  This is to do proper '%%' translation.
+            $sql = sprintf($statement, @_);
 
             if( $cache ) {
                 $sth = $dbh->prepare_cached($sql);
@@ -452,17 +471,75 @@ sub _mk_sql_closure {
         else {          # $sth defined.
             # Check to see if the handle is active.
             if( $sth->FETCH('Active') ) {
+                require Carp;
                 Carp::carp("'$sql_name' statement handle is still ".
                            "active!  Finishing for you.");
                 $sth->finish;
             }
         }
-        
+
         return $sth;
     };
 }
 
-=pod
+=item B<db_names>
+
+=item B<db_handles>
+
+  my @database_names   = Foo->db_names;
+  my @database_handles = Foo->db_handles;
+  my @database_handles = Foo->db_handles(@db_names);
+
+Returns a list of the database handles set up for this class using
+set_db().  This includes all inherited handles.
+
+db_names() simply returns the name of the handle, from which it is
+possible to access it by converting it to a method name and calling
+that db method...
+
+    my @db_names = Foo->db_names;
+    my $db_meth = 'db_'.$db_names[0];
+    my $dbh = $foo->$db_meth;
+
+Icky, eh?  Fortunately, db_handles() does this for you and returns a
+list of database handles in the same order as db_names().  B<Use this
+sparingly> as it will connect you to the database if you weren't
+already connected.
+
+If given @db_names, db_handles() will return only the handles for
+those connections.
+
+These both work as either class or object methods.
+
+=cut
+
+sub db_names {
+    return @{$_[0]->__Database_Names || []};
+}
+
+sub db_handles {
+    my($self, @db_names) = @_;
+    @db_names = $self->db_names unless @db_names;
+    return map { $self->$_() } map { 'db_'.$_ } @db_names;
+}
+
+
+=item B<sql_names>
+
+  my @statement_names   = Foo->sql_names;
+
+Similar to db_names() this returns the names of all SQL statements set
+up for this class using set_sql(), inherited or otherwise.
+
+There is no corresponding sql_handles() because we can't know what
+arguments to pass in.
+
+=cut
+
+sub sql_names {
+    return @{$_[0]->__Statement_Names || []};
+}
+
 
 =back
 
@@ -473,7 +550,7 @@ sub _mk_sql_closure {
 =item B<db_*>
 
     $dbh = $obj->db_*;
-    
+
 This is how you directly access a database handle you set up with set_db.
 
 The actual particular method name is derived from what you told set_db.
@@ -489,7 +566,7 @@ connected to the database.
 sql_*() is a catch-all name for the methods you set up with set_sql().
 For instance, if you did:
 
-    __PACKAGE__->set_sql('GetAllFoo', 'Select * From Foo', 'SomeDb');
+    Foo->set_sql('GetAllFoo', 'Select * From Foo', 'SomeDb');
 
 you'd run that statement with sql_GetAllFoo().
 
@@ -502,7 +579,7 @@ If sql_*() is given a list of @sql_pieces it will use them to fill in
 your statement, assuming you have sprintf() formatting tags in your
 statement.  For example:
 
-    __PACKAGE__->set_sql('GetTable', 'Select * From %s', 'Things');
+    Foo->set_sql('GetTable', 'Select * From %s', 'Things');
     
     # Assuming we have created an object... this will prepare the
     # statement 'Select * From Bar'
@@ -516,10 +593,10 @@ will be spared the worst.
 It is recommended you only use this in cases where bind parameters
 will not work.
 
-=item B<clear_db_cache>     *UNIMPLEMENTED*
+=item B<clear_db_cache>         B<*UNIMPLEMENTED*>
 
-    $obj->clear_db_cache;
-    $obj->clear_db_cache(@db_names);
+    Foo->clear_db_cache;
+    Foo->clear_db_cache(@db_names);
 
 Ima::DBI uses the DBI->connect_cached to cache open database handles.
 For whatever reason you might want to clear this cache out and start
@@ -538,32 +615,11 @@ Alternatively, you may do:  $obj->db_Name->clear_cache;
 =cut
 
 sub clear_db_cache {
-#    _taint_check(@_);
     _unimplemented;
 }
 
-=pod
 
-=item B<clear_sql_cache>    *UNIMPLEMENTED*
-
-    $obj->clear_sql_cache;
-    $obj->clear_sql_cache(@sql_names);
-
-Does the same thing as clear_db_cache, except it does it in relation
-to statement handles.
-
-Alternatively, you may do:  $obj->sql_Name->clear_cache;
-
-=cut
-
-sub clear_sql_cache {
-#    _taint_check(@_);
-    _unimplemented;
-}
-
-=pod
-
-=item B<DBIwarn>    *UNIMPLEMENTED*
+=item B<DBIwarn>
 
     $obj->DBIwarn($what, $doing);
     
@@ -595,8 +651,6 @@ sub DBIwarn {
     return SUCCESS;
 }
 
-=pod
-
 =back
 
 
@@ -608,7 +662,7 @@ spices up the API a bit.
  
 =over 4
 
-=item B<commit>         *UNIMPLEMENTED*
+=item B<commit>
 
     $rc = $obj->commit;
     $rc = $obj->commit(@db_names);
@@ -621,16 +675,19 @@ database handles whose names are listed in @db_names.
 
 Alternatively, you may like to do:  $rc = $obj->db_Name->commit;
 
+If all the commits succeeded it returns true, false otherwise.
+
 =cut
 
 sub commit {
-#    _taint_check(@_);
-    _unimplemented;
+    my($self, @db_names) = @_;
+
+    return grep !$_, map $_->commit, $self->db_handles(@db_names) ? 0 : 1;
 }
 
 =pod
 
-=item B<rollback>       *UNIMPLEMENTED*
+=item B<rollback>
 
     $rc = $obj->rollback;
     $rc = $obj->rollback(@db_names);
@@ -640,12 +697,16 @@ except that it calls rollback().
 
 Alternatively, you may like to do:  $rc = $obj->db_Name->rollback;
 
+If all the rollbacks succeeded it returns true, false otherwise.
+
 =cut
 
 sub rollback {
-#    _taint_check(@_);
-    _unimplemented;
+    my($self, @db_names) = @_;
+
+    return grep !$_, map $_->rollback, $self->db_handles(@db_names) ? 0 : 1;
 }
+
 
 ################################ Ima::DBI::db #############################
 ###################### DBI database handle subclass #######################
@@ -654,7 +715,6 @@ package Ima::DBI::db;
 
 use Ima::DBI::utility;
 use Carp::Assert;
-use Carp;
 
 use base qw(DBI::db);  # Uhh, I think that's right.
 
@@ -663,9 +723,30 @@ use base qw(DBI::db);  # Uhh, I think that's right.
 =item B<clear_cache>    *UNIMPLEMENTED*
 
     $dbh->clear_cache;
-    
-Provides a mechanism to clear a given database handle from the cache.
 
+Provides a mechanism to clear a given database handle from the cache.
+All statement handles based on this handle will also be removed.
+
+=cut
+
+sub clear_cache {
+    my($self) = shift;
+    my $cache = $self->{Driver}{CachedKids};
+
+    # Not the most efficient thing in the universe, but the cache should
+    # be small.
+    while(my($k, $dbh) = each %$cache) {
+        if( $dbh eq $self ) {
+            delete $cache->{$k};
+            last;
+        }
+    }
+
+    my $sql_cache = $self->{CachedKids};
+    %$sql_cache = ();
+
+    return UNUSED;
+}
 
 =back
 
@@ -687,7 +768,6 @@ use base qw(DBI::st);
 
 use Ima::DBI::utility;
 use Carp::Assert;
-use Carp;
 
 =pod
 
@@ -727,7 +807,7 @@ must perform the bind_param, execute, bind_col sequence yourself.
 
 sub execute {
     my($sth) = shift;
-    
+
     my $rv;
 
     my $orig_taint = $sth->{Taint};
@@ -757,7 +837,7 @@ sub execute {
         $rv = $sth->SUPER::execute(@_);
 	$sth->{Taint} = $orig_taint;
     }
-    
+
     return $rv;
 }
 
@@ -766,14 +846,23 @@ sub execute {
 =item B<clear_cache>    *UNIMPLEMENTED*
 
     $sth->clear_cache;
-    
+
 Provides a mechanism to clear a given statement handle from the cache.
 
 =cut
 
 sub clear_cache {
-    _taint_check(@_);
-    _unimplemented;
+    my($self) = shift;
+    my $cache = $self->{Database}{CachedKids};
+
+    # Not the most efficient thing in the universe, but the cache should
+    # be small.
+    while(my($k, $sth) = each %$cache) {
+        if( $sth eq $self ) {
+            delete $cache->{$k};
+            last;
+        }
+    }
 }
 
 =pod
@@ -881,32 +970,32 @@ sub fetchall_hash {
 
     package Foo;
     use base qw(Ima::DBI);
-    
+
     # Set up database connections (but don't connect yet)
-    __PACKAGE__->set_db('Users', 'dbi:Oracle:Foo', 'admin', 'passwd');
-    __PACKAGE__->set_db('Customers', 'dbi:Oracle:Foo', 'Staff', 'passwd');
-    
+    Foo->set_db('Users', 'dbi:Oracle:Foo', 'admin', 'passwd');
+    Foo->set_db('Customers', 'dbi:Oracle:Foo', 'Staff', 'passwd');
+
     # Set up SQL statements to be used through out the program.
-    __PACKAGE__->set_sql('FindUser', <<"SQL", 'Users');
+    Foo->set_sql('FindUser', <<"SQL", 'Users');
         SELECT  *
         FROM    Users
         WHERE   Name LIKE ?
     SQL
-    
-    __PACKAGE__->set_sql('ChangeLanguage', <<"SQL", 'Customers');
+
+    Foo->set_sql('ChangeLanguage', <<"SQL", 'Customers');
         UPDATE  Customers
         SET     Language = ?
         WHERE   Country = ?
     SQL
-    
-    
+
+
     # rest of the class as usual.
-    
-    
+
+
     package main:
-    
+
     $obj = Foo->new;
-    
+
     eval {
         # Does connect & prepare
         my $sth = $obj->sql_FindUser;
@@ -915,13 +1004,13 @@ sub fetchall_hash {
         while( $sth->fetch ) {
             print $name;
         }
-        
+
         # Uses cached database and statement handles
         $sth = $obj->sql_FindUser;
         # bind_params & execute.
         $sth->execute('%Hock');
         @names = $sth->fetchall;
-        
+
         # connects, prepares
         $rows_altered = $obj->sql_ChangeLanguage->execute(qw(es_MX mx));
     };
@@ -944,16 +1033,6 @@ sub fetchall_hash {
 Using DBI->init_rootclass to pull of subclassing.  This is currently
 an undocumented method (this should change soon).
 
-=item Unstable Interface
-
-I haven't totally decided if I'm satisfied with the way this module
-works, so expect the worst, the interface will change.
-
-=item execute() extensions questionable
-
-I'm not really sure the additional functionality added to execute() is
-all that useful.
-
 =item tainting may be too broad
 
 Having Ima::DBI not accept any tainted data at all is probably too
@@ -964,37 +1043,40 @@ data.
 This is now a joint issue between DBI and Ima::DBI (well, more like
 a master/slave issue.)
 
+=item Need a way to tell if a handle is already set up.
+
+I need something like is_connected() and is_prepared() to tell if the
+handle for a bit of SQL or a db has already been connected or
+prepared.  This is mostly for internal use, but I'd imagine people
+will find uses for it.
+
+=item clear_cache, clear_db_cache and clear_sql_cache still unimplemented
+
+Having some trouble getting those to work.  I need to implement
+is_connected() and is_prepared() first.
+
 =item db_* should take arguments
 
 But what?
 
-=item set_sql() and/or sql_* needs an optional caching flag.
-
-Right now static SQL (those without sprintf flags) is always prepared
-with prepare_cached() and dynamic with just prepare().  It would be
-nice if there was a way to explicitly set the caching behavior.
-
 =item I seriously doubt its thread safe.
 
 You can bet cupcackes to sno-cones that much havoc will be wrought if
-Ima::DBI is used in a threaded Perl.  I don't think DBI is even
-thread-safe.
+Ima::DBI is used in a threaded Perl.
 
 =item Should make use of private_* handle method to store information
-
-=item Having difficulty storing a list of dbh and sth names.
-
-Storing the association between names and handles is fine, via the
-closures (and thus, the symbol table), but trying to store a complete
-list of all names available to a given object (and thus, inheritable)
-is difficult.  Many minor methods are unimplemented until I figure out
-this problem.
 
 =item The docs stink.
 
 The docs were originally written when I didn't have a good handle on
 the module and how it will be used in practical cases.  I need to
 rewrite the docs from the ground up.
+
+=item Need to add debugging hooks.
+
+The thing which immediately comes to mind is a Verbose flag to print
+out SQL statements as they are made as well as mention when database
+connections are made, etc...
 
 =back
 
@@ -1006,7 +1088,7 @@ Michael G Schwern <schwern@pobox.com>
 
 =head1 COPYRIGHT
 
-This module is Copyright (c) 1998-2000 Michael G Schwern.
+This module is Copyright (c) 1998-2001 Michael G Schwern.
 USA.  All rights reserved.
 
 This module is free software.  You may distribute under the same terms
@@ -1028,7 +1110,6 @@ as Perl itself.  IT COMES WITHOUT WARRANTY OF ANY KIND.
 DBI
 
 =cut
-
 
 
 return 1001001;

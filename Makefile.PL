@@ -23,6 +23,7 @@ WriteMakefile(
                             Carp::Assert        => 0.05,
                             Carp                => 0,
                             Class::WhiteHole    => 0.03,
+                            Class::Data::Inheritable => 0.02,
                           },
           'dist'      =>   {COMPRESS => 'gzip -9',
                             SUFFIX   => '.gz',
