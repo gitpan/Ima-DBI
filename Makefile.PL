@@ -22,7 +22,7 @@ WriteMakefile(
           'PREREQ_PM'  => { DBI => 1.09,
                             Carp::Assert        => 0.05,
                             Carp                => 0,
-                            Class::WhiteHole    => 0.02,
+                            Class::WhiteHole    => 0.03,
                           },
           'dist'      =>   {COMPRESS => 'gzip -9',
                             SUFFIX   => '.gz',

@@ -10,7 +10,7 @@ use Ima::DBI::utility;
 use vars qw($VERSION @ISA);
 
 BEGIN {
-    $VERSION = '0.23';
+    $VERSION = '0.24';
 
     # We accidentally inherit AutoLoader::AUTOLOAD from DBI.  Send it to
     # the white hole.
@@ -605,22 +605,7 @@ sub DBIwarn {
 Ima::DBI makes some of the methods available to your object that are
 normally only available via the database handle.  In addition, it
 spices up the API a bit.
-
-=cut
-
-################################ Ima::DBI::db #############################
-###################### DBI database handle subclass #######################
-
-package Ima::DBI::db;
-
-use Ima::DBI::utility;
-use Carp::Assert;
-use Carp;
-
-use base qw(DBI::db);  # Uhh, I think that's right.
-
-=pod
-
+ 
 =over 4
 
 =item B<commit>         *UNIMPLEMENTED*
@@ -661,6 +646,17 @@ sub rollback {
 #    _taint_check(@_);
     _unimplemented;
 }
+
+################################ Ima::DBI::db #############################
+###################### DBI database handle subclass #######################
+
+package Ima::DBI::db;
+
+use Ima::DBI::utility;
+use Carp::Assert;
+use Carp;
+
+use base qw(DBI::db);  # Uhh, I think that's right.
 
 =pod
 

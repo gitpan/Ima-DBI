@@ -1,4 +1,8 @@
 Revision history for Perl extension Ima::DBI.
+0.24  Sun Sep 10 00:50:15 EDT 2000
+    - *bug fix* commit() and rollback() were accidentally broken on
+      database handles
+
 0.23  Sun Jul  9 04:57:51 EDT 2000
     - Fixed accidental AutoLoader inheritance.
 
