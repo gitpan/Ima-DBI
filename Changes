@@ -1,7 +1,10 @@
 Revision history for Perl extension Ima::DBI.
 
-0.28  Thu Dec  5 2002
-    - localising a tied variable leaks with old perls. Work around this.
+0.29  Sun Jun 22 15:50:12 BST 2003
+		- Allow subclasses to provide their own transform_sql method
+
+0.28  Fri Jan  3 16:23:04 GMT 2003
+		- stop sql_closure holding a lexical $sth
 
 0.27  Sat Feb 16 11:55:23 GMT 2002
     - fix precedence bug with commit / rollback

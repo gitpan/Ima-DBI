@@ -8,7 +8,7 @@ require Class::Data::Inheritable;
 use vars qw($VERSION @ISA);
 
 BEGIN {
-    $VERSION = '0.28';
+    $VERSION = '0.29';
 
     # We accidentally inherit AutoLoader::AUTOLOAD from DBI.  Send it to
     # the white hole.
@@ -413,38 +413,25 @@ sub set_sql {
 
 
 sub _mk_sql_closure {
-    my($class, $sql_name, $statement, $db_meth, $cache) = @_;
+	my($class, $sql_name, $statement, $db_meth, $cache) = @_;
 
-    my $sth;
-    return sub {
-        my $class = shift;
-
-        # Must allow subclasses to override database connections.
-        my $dbh = $class->$db_meth();
-
-        # Calling prepare_cached over and over again is also expensive.
-        # Again, we co-opt some of prepare_cached's functionality.
-        if ( !$sth or @_ ) {  # No $sth defined yet.
-            my $sql = '';
-
-            # Everything must pass through sprintf, even if @_ is empty.  
-            # This is to do proper '%%' translation.
-            $sql = sprintf($statement, @_);
-            $sth = $cache ? $dbh->prepare_cached($sql)
-                          : $dbh->prepare($sql);
-        } else { 
-            # Check to see if the handle is active.
-            if( $sth->FETCH('Active') ) {
-                require Carp;
-                Carp::carp("'$sql_name' statement handle is still ".
-                           "active!  Finishing for you.");
-                $sth->finish;
-            }
-        }
-
-        return $sth;
-    };
+	return sub {
+		my $class = shift;
+		my $dbh = $class->$db_meth();
+		# Everything must pass through sprintf, even if @_ is empty.
+		# This is to do proper '%%' translation.
+		my $sql = $class->transform_sql($statement => @_);
+		return $cache 
+			? $dbh->prepare_cached($sql)
+			: $dbh->prepare($sql);
+	};
 }
+
+sub transform_sql {
+	my ($class, $sql, @args) = @_;
+	return sprintf $sql, @args;
+}
+	
 
 =item B<db_names>
 
@@ -725,16 +712,12 @@ sub _disallow_references {
 # We're going to shut off tainting for execute() with bind params
 # because I can't think of a good reason why a tainted bind param would
 # be dangerous (in general) and its really obnoxious to have to detaint
-# -all- your bind params. This can't be done with local $sth->{Taint} as
-# localising a tied variable leaks under old perls :(
+# -all- your bind params.
 
 sub _untaint_execute {
   my $sth = shift;
-	my $old_value = $sth->{Taint};
-	$sth->{Taint} = 0;
-  my $ret = $sth->SUPER::execute(@_);
-	$sth->{Taint} = $old_value;
-	return $ret;
+  local $sth->{Taint} = 0;
+  return $sth->SUPER::execute(@_);
 }
 
 =back
@@ -917,30 +900,27 @@ connections are made, etc...
 
 =back
 
+=head1 MAINTAINER
 
-=head1 AUTHOR
+Tony Bowden <tony@tmtm.com>
+
+=head1 ORIGINAL AUTHOR 
 
 Michael G Schwern <schwern@pobox.com>
 
-Now maintained by Tony Bowden <kasei@com>
-
-=head1 COPYRIGHT
-
-This module is Copyright (c) 1998-2001 Michael G Schwern.
-USA.  All rights reserved.
+=head1 LICENSE
 
 This module is free software.  You may distribute under the same terms
 as Perl itself.  IT COMES WITHOUT WARRANTY OF ANY KIND.
 
-
 =head1 THANKS MUCHLY
 
-    Tim Bunce, for enduring many DBI questions and adding Taint,
-    prepare_cached and connect_cached methods to DBI, simplifying
-    this greatly!
+Tim Bunce, for enduring many DBI questions and adding Taint,
+prepare_cached and connect_cached methods to DBI, simplifying this
+greatly!
 
-    Arena Networks, for effectively paying for Mike to finish writing
-    this module.
+Arena Networks, for effectively paying for Mike to write most of this
+module.
 
 =head1 SEE ALSO
 
@@ -950,6 +930,5 @@ You may also choose to check out L<Class::DBI> which hides most of this
 from view.
 
 =cut
-
 
 return 1001001;
