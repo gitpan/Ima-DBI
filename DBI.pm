@@ -1,7 +1,7 @@
 package Ima::DBI;
 
 use strict;
-use DBI 1.06;
+use DBI 1.07;
 use Carp;
 use Carp::Assert 0.05;
 use Ima::DBI::utility;
@@ -9,7 +9,7 @@ use Ima::DBI::utility;
 use vars qw($VERSION);
 
 BEGIN {
-    $VERSION = '0.05';
+    $VERSION = '0.06';
 }
 
 # Much of the real data about the handles is inside DBI.
@@ -152,7 +152,7 @@ before passing it on to prepare.
 
 =item * Taints returned data	* INCOMPLETE *
 
-Databases should be like any other system call.  Its the scary Outside World, thus it should be tainted.  Simp.
+Databases should be like any other system call.  Its the scary Outside World, thus it should be tainted.  Simp.  Ima::DBI turns on DBI's Taint attribute on each connection.  This feature is overridable by passing your own Taint attribute to set_db as normal for DBI.
 
 =item * Encapsulation of some of the more repetative bits of everyday DBI usage
 
@@ -250,11 +250,9 @@ Ima::DBI, unlike DBI, honors taint mode.
 
 For the time being it will be a sweeping thing, no Ima::DBI or
 Ima::DBI::st method will accept tainted data.  This may be relaxed in
-the future.
+the future.  (This part is currently incomplete)
 
-In addition, Ima::DBI taints all data returned from the database.
-
-This feature is incomplete, as I have yet to wrap all applicable DBI methods.
+In addition, Ima::DBI taints all data returned from the database via the DBI Taint attribute.
 
 =cut
 
@@ -300,7 +298,7 @@ sub set_db {
     
     # Join the user's %attr with our defaults.
     $attr = {} unless defined $attr;
-    $attr = { RaiseError => 1, AutoCommit => 0, PrintError => 0, %$attr };
+    $attr = { RaiseError => 1, AutoCommit => 0, PrintError => 0, Taint => 1, %$attr };
     
     # ------------------------ db_* closure --------------------------#
     my @connection = ($data_source, $user, $password, $attr);
@@ -561,7 +559,7 @@ use Carp::Assert;
 use Carp;
 
 use vars qw($VERSION);
-BEGIN { $VERSION = '0.05'; }
+BEGIN { $VERSION = '0.06'; }
 
 =pod
 
@@ -608,7 +606,7 @@ sub execute {
         $rv = $sth->SUPER::execute(@_);
     }
     
-    return _taint_this($rv);
+    return $rv;
 }
 
 =pod
@@ -655,8 +653,8 @@ fetchrow_array.
 
 sub fetch {
     my($sth) = shift;
-    return wantarray ? _taint_these($sth->SUPER::fetchrow_array)
-                     : _taint_this($sth->SUPER::fetchrow_arrayref);
+    return wantarray ? $sth->SUPER::fetchrow_array
+                     : $sth->SUPER::fetchrow_arrayref;
 }
 
 =pod
@@ -674,7 +672,7 @@ complete hash.
 
 sub fetch_hash {
     my($sth) = shift;
-    my $row = _taint_this($sth->SUPER::fetchrow_hashref);
+    my $row = $sth->SUPER::fetchrow_hashref;
     return wantarray ? %$row
                      : $row;
 }
@@ -694,7 +692,7 @@ fetched.
 
 sub fetchall {
     my($sth) = shift;
-    my $rows = _taint_this($sth->SUPER::fetchall_arrayref);
+    my $rows = $sth->SUPER::fetchall_arrayref;
     return wantarray ? @$rows
                      : $rows;
 }
@@ -717,7 +715,7 @@ it returns a list of hash references.
 sub fetchall_hashref {
     my($sth) = shift;
     my(@rows, $row);
-    push @rows, $row while ($row = _taint_this($sth->SUPER::fetchrow_hashref));
+    push @rows, $row while ($row = $sth->SUPER::fetchrow_hashref);
     return wantarray ? @rows : \@rows;
 }
 
@@ -811,9 +809,9 @@ general, but I'd rather be too strict to start than be too lax and try
 to restrict later.  In the future, certain methods may accept tainted
 data.
 
-=item Manual tainting incomplete
+=item taint check incomplete
 
-My method of spreading disease through the returned data does not appear to reach referenced data properly.
+My method of checking if something is tainted does not delve deep enough into a given data structure.  This only shows up in the two argument version of execute().
 
 =item sql_* and db_* should take arguments
 

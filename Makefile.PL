@@ -19,7 +19,7 @@ CHANGE_WARN
 WriteMakefile(
           'NAME'        => 'Ima::DBI',
           'VERSION_FROM'  => 'DBI.pm', # finds $VERSION
-          'PREREQ_PM'  => { DBI => 1.06,
+          'PREREQ_PM'  => { DBI => 1.07,
                             Carp::Assert => 0.05,
                             Carp => 0,
                           },

@@ -1,4 +1,6 @@
 Revision history for Perl extension DBI::Ima.
+0.06  Sat May  8 03:50:34 EDT 1999
+    - Implements data tainting via DBI->{Taint}  (Thanks, Tim!)
 
 0.05  Tue May  4 22:08:56 EDT 1999
     * code for tainting fetched data added

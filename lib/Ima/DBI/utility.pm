@@ -45,7 +45,7 @@ $Evil =~ s/.*//;
 sub _taint_this ($) {
     my($data) = shift;
 
-    $@ = $Evil;
+    local $@ = $Evil;
     if( ref $data ) {
 		eval { die $data };
 		$data = $@;
