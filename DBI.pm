@@ -12,25 +12,20 @@ Ima::DBI - Makes an object be the database connection
   use Ima::DBI;
   @ISA = qw(Ima::DBI);
 
+  # Set up the database connections used, but don't actually connect, yet.
+  Foo->setConnection('Users', 'dbi:Oracle:STAR', 'UserAdmin', 'b4u3');
+  Foo->setConnection('Customers', 'dbi:Oracle:STAR', 'Staff', 'r3d0dd');
+
+  Foo->setStatement('FindUser', 
+					'SELECT * FROM USERS WHERE name = ?','Users');
+  Foo->setStatement('AddUser', $AddUserSQL, 'Users');
+  Foo->setStatement('AlterCustomer', 
+					'UPDATE CUSTOMERS SET language = ? 
+                     WHERE country = ?', 'Customers');
+
+
   sub new {
     # the usual stuff
-    # followed by...
-    
-    bless $self, $class;
-
-    # Set up the database connections used, but don't actually connect, yet.
-    $self->setConnection('Users', 'dbi:Oracle:STAR', 'UserAdmin', 'b4u3');
-    $self->setConnection('Customers', 'dbi:Oracle:STAR', 'Staff', 'r3d0dd');
-
-    # Set up sql_* methods
-    $self->setStatement('FindUser', 
-			'SELECT * FROM USERS WHERE name = ?','Users');
-    $self->setStatement('AddUser', $AddUserSQL, 'Users');
-    $self->setStatement('AlterCustomer', 
-			'UPDATE CUSTOMERS SET language = ? 
-                         WHERE country = ?', 'Customers');
-
-    return $self;
   }
 
   
@@ -74,7 +69,7 @@ use vars qw($VERSION);
 
 
 BEGIN {
-  $VERSION = 0.01;
+  $VERSION = 0.03;
 }
 
 
@@ -95,8 +90,8 @@ my %Statements;     # All available Statements (but not handles)
 
 =item B<setConnection>
 
-  $obj->setConnection($connectionName, $dataSource, 
-		      $username, $password) ||
+  Module::Name->setConnection($connectionName, $dataSource, 
+		                      $username, $password) ||
     warn "We already have a connection with the name $connectionName";
 
 Tells how to connect to a database.  This connection will be refered to by
@@ -110,6 +105,9 @@ defered until an sql_*() method is called.  Eventually this will do
 something more clever, like the dbh checkin/checkout system described in
 the new TPJ.
 
+Eventually it will use the DBI->connect_cached that's been promised for a 
+while.
+
 =cut
 
 #'# cperl bug
@@ -120,6 +118,8 @@ the new TPJ.
 # don't feel like thinking about that.
 #
 # In the future, this may also create a _dbh_* closure.
+#
+# Shit, this isn't safe across packages!
 sub setConnection {
   my($self, $dbName, $dataSource, $username, $password) = @_;
 
@@ -141,7 +141,7 @@ sub setConnection {
 
 =item B<setStatement>
 
-  $obj->setStatement($statementName, $sql, $connectionName) ||
+  Module::Name->setStatement($statementName, $sql, $connectionName) ||
      warn "We couldn't make the statement $statementName";
 
 Sets up an SQL statement and access method on the database specified by 
@@ -149,8 +149,7 @@ $connectionName, which was set up by setConnection().  The access
 method is named "sql_$statementName()".  Returns undef if a statement with
 this name has already been created, true otherwise.
 
-ie.  $obj->setStatement('Bubba', 'select * from table', 'Data');  creates
-a method called sql_Bubba().
+ie.  Module::Name->setStatement('Bubba', 'select * from table', 'Data');  creates a method called sql_Bubba().
 
 
 =item B<sql_*>
@@ -187,15 +186,7 @@ sub setStatement {
     $Statements{$name} = { 
 			  sql      => $sql,
 			  database => $database,
-			  sth      => {}
 			 };
-
-    
-
-    # Variables used by the closure.
-    # $name, $database and $sql are as well.
-    my $Sths = $Statements{$name}{sth};  # $Sths stores all statement handes, 
-                                         # indexed by $self.
 
 
     # PROBLEM - How to have an access method which returns a unique
@@ -212,26 +203,17 @@ sub setStatement {
     no strict 'refs';  # We need a symbolic reference here.
     *{$package."::sql_$name"} = 
       sub {
-	use strict 'refs';
-	my($self) = @_;
+		use strict 'refs';
+		my($self) = @_;
 
-	my $sth = $Sths->{$self};  # Uggg, hack!  I HATE THIS!
-	                           # $sth should be part of the closure,
-	                           # but I can't do that.
+		my $sth = $self->_connect($database)->prepare_cached($sql);
 
-	# prepare the closure's statement handle, if we haven't already.
-	# this should happen only on the first call.
-	unless ( defined $sth ) {
-	  $sth = $self->_connect($database)->prepare($sql);
-
-	  # This isn't the most pleasent thing in the universe to do.
-	  # The hard-coded class is baaaaaaad.  Need to think of something
-	  # more creative.
-	  bless $sth, 'Ima::DBI::st';   # Praise Bob, it is Born Again!!!
-	  $Sths->{$self} = $sth;
-	}
+		# This isn't the most pleasent thing in the universe to do.
+		# The hard-coded class is baaaaaaad.  Need to think of something
+		# more creative.
+		bless $sth, 'Ima::DBI::st';   # Praise Bob, it is Born Again!!!
 	
-	return $sth;
+		return $sth;
       };
     #-------------- END sql_* CLOSURE --------------------------------------
 
@@ -545,11 +527,43 @@ with L</fetch> than anything else.
 
 sub fetchall {
   my($sth) = @_;
-  my $tbl = $sth->SUPER::fetchall_arrayref;
+  my $tbl = $sth->fetchall_arrayref;
   
   return wantarray ? @$tbl : $tbl;
 }
 
+
+=pod
+
+=item B<fetchall_hashref>
+
+  $tbl_ref = $obj->sql_name->fetchall_hash;
+  @tbl     = $obj->sql_name->fetchall_hash;
+
+This method acts very much like fetchrow_hashref(), except that it
+slurps down the every row of the fetch, as fetchall does, but into an
+array of hashes, rather than an array of arrays.
+
+Like fetchall(), it is sensitive to the context, so if used in list
+context it returns an array of hashes.  In scalar context it returns a
+reference to an array of hashes (I don't know how much that really
+buys you.)
+
+B<CAVET SCRIPTOR!> fetchrow_hashref is bad enough as a potential
+memory/performance hog, fetchall_hashref has the potential to -really-
+hose things if used on large fetches.  It's ment as a convenience,
+don't abuse it too badly.
+
+=cut
+
+# Looks like there's some code to do this in DBI->fetchall_arrayref,
+# but its undocumented.
+sub fetchall_hashref {
+    my $sth = shift;
+    my (@rows, $row);
+    push @rows, $row while ($row = $sth->fetchrow_hashref);
+    return wantarray ? @rows : \@rows;
+} 
 
 # DESTRRRRRRROOOOOOOOOYYYY!!
 sub DESTROY {

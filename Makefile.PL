@@ -4,7 +4,7 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
 	      'NAME'	    => 'Ima::DBI',
 	      'VERSION_FROM'  => 'DBI.pm', # finds $VERSION
-	      'PREREQ_PM'  => { DBI => 0
+	      'PREREQ_PM'  => { DBI => 1.06
 						  },
 	      'dist'      =>   {COMPRESS => 'gzip -9',
 							SUFFIX   => '.gz',
