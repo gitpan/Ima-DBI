@@ -1,5 +1,9 @@
 Revision history for Perl extension Ima::DBI.
 
+0.33 Mon Mar 15 19:33:11 GMT 2004
+		- We're no longer a subclass of DBI directly. Instead we use
+		  DBIx::ContextualFetch
+
 0.32 Sat Feb 28 10:13:42 GMT 2004
 		- Fix minor bug in set_sql relating to method names containing
 		  spaces [Davide Dente]

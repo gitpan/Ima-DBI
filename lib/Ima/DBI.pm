@@ -1,19 +1,10 @@
 package Ima::DBI;
 
+$VERSION = '0.33';
+
 use strict;
+use base 'Class::Data::Inheritable';
 use DBI;
-require Class::WhiteHole;
-require Class::Data::Inheritable;
-
-use vars qw($VERSION @ISA);
-
-BEGIN {
-	$VERSION = '0.32';
-
-	# We accidentally inherit AutoLoader::AUTOLOAD from DBI.  Send it to
-	# the white hole.
-	@ISA = qw(Class::WhiteHole DBI Class::Data::Inheritable);
-}
 
 # Some class data to store a per-class list of handles.
 Ima::DBI->mk_classdata('__Database_Names');
@@ -26,8 +17,7 @@ Ima::DBI - Database connection caching and organization
 =head1 SYNOPSIS
 
     package Foo;
-    require Ima::DBI;
-    @ISA = qw(Ima::DBI);
+    use base 'Ima::DBI';
 
     # Class-wide methods.
     Foo->set_db($db_name, $data_source, $user, $password);
@@ -47,25 +37,6 @@ Ima::DBI - Database connection caching and organization
     $sth = $obj->sql_*(@sql_pieces);
 
     $obj->DBIwarn($what, $doing);
-
-
-    # Modified statement handle methods.
-    my $rv = $sth->execute;
-    my $rv = $sth->execute(@bind_values);
-    my $rv = $sth->execute(\@bind_values, \@bind_cols);
-
-    # In addition to the normal DBI sth methods...
-    my $row_ref = $sth->fetch;
-    my @row     = $sth->fetch;
-
-    my $row_ref = $sth->fetch_hash;
-    my %row     = $sth->fetch_hash;
-
-    my $rows_ref = $sth->fetchall;
-    my @rows     = $sth->fetchall;
-
-    my $rows_ref = $sth->fetchall_hash;
-    my @tbl      = $sth->fetchall_hash;
 
     my $rc = $obj->commit;
     my $rc = $obj->commit(@db_names);
@@ -179,13 +150,6 @@ have to worry about it. (It even makes it a bit more efficient)
 
 Any SQL statements and connections created by a class are available to
 its children via normal method inheritance.
-
-=item * Convenience and orthogonality amongst statement handle methods
-
-It always struck me odd that DBI didn't take much advantage of Perl's
-context sensitivity.  Ima::DBI redefines some of the various fetch
-methods to fix this oversight. It also adds a few new methods for
-convenience (though not necessarily efficiency).
 
 =item * Guarantees one connection per program.
 
@@ -329,7 +293,13 @@ sub _add_default_attributes {
 }
 
 sub _default_attributes {
-	(RaiseError => 1, AutoCommit => 0, PrintError => 0, Taint => 1);
+	(
+		RaiseError => 1,
+		AutoCommit => 0,
+		PrintError => 0,
+		Taint      => 1,
+		RootClass  => "DBIx::ContextualFetch"
+	);
 }
 
 sub _remember_handle {
@@ -344,7 +314,7 @@ sub _mk_db_closure {
 	my $dbh;
 	return sub {
 		unless ($dbh && $dbh->FETCH('Active') && $dbh->ping) {
-			$dbh = Ima::DBI->connect_cached(@connection);
+			$dbh = DBI->connect_cached(@connection);
 		}
 		return $dbh;
 	};
@@ -618,221 +588,6 @@ If all the rollbacks succeeded it returns true, false otherwise.
 sub rollback {
 	my ($self, @db_names) = @_;
 	return grep(!$_, map $_->rollback, $self->db_handles(@db_names)) ? 0 : 1;
-}
-
-################################ Ima::DBI::db #############################
-###################### DBI database handle subclass #######################
-
-package Ima::DBI::db;
-use base 'DBI::db';
-
-############################## Ima::DBI::st ##################################
-###################### DBI statement handle subclass #########################
-
-package Ima::DBI::st;
-use base 'DBI::st';
-
-=head2 Modified statement handle methods
-
-Ima::DBI overrides the normal DBI statement handle with its own,
-slightly modified, version.  Don't worry, it inherits from DBI::st, so
-anything not explicitly mentioned here will work just like in normal
-DBI.
-
-=over 4
-
-=item B<execute>
-
-    $rv = $sth->execute;
-    $rv = $sth->execute(@bind_values);
-    $rv = $sth->execute(\@bind_values, \@bind_cols);
-    
-DBI::st->execute is overridden to enhance execute() a bit.
-
-If called with no arguments, or with a simple list, execute() operates
-normally.  When when called with two array references, it performs the
-functions of bind_param, execute and bind_columns similar to the
-following:
-
-    $sth->execute(@bind_values);
-    $sth->bind_columns(undef, @bind_cols);
-
-In addition, execute I<will accept tainted @bind_values>.  I
-personally found it annoying to have to detaint everything I passed to
-execute() and tended to shut off taint mode rather than go through the
-trouble.  I also can't think of what a malicious user could do with a
-tainted bind value (in the general case.  Your application may vary.)
-
-Thus a typical idiom would be:
-
-    $sth->execute([$this, $that], [\($foo, $bar)]);
-
-Of course, this method provides no way of passing bind attributes
-through to bind_param or bind_columns.  If that is necessary, then you
-must perform the bind_param, execute, bind_col sequence yourself.
-
-=cut
-
-sub execute {
-	my ($sth) = shift;
-
-	my $rv;
-
-	# Allow $sth->execute(\@param, \@cols) and
-	# $sth->execute(undef, \@cols) syntax.
-	if (  @_ == 2
-		and (!defined $_[0] || ref $_[0] eq 'ARRAY')
-		and ref $_[1] eq 'ARRAY') {
-		my ($bind_params, $bind_cols) = @_;
-		$rv = $sth->_untaint_execute(@$bind_params);
-		$sth->SUPER::bind_columns(@$bind_cols);
-		} else {
-		$sth->_disallow_references(@_);
-		$rv = $sth->_untaint_execute(@_);
-	}
-	return $rv;
-}
-
-sub _disallow_references {
-	my $self = shift;
-	foreach (@_) {
-		next unless ref $_;
-		next if overload::Method($_, q{""});
-		next if overload::Method($_, q{0+});
-		die "Cannot call execute with a reference ($_)\n";
-	}
-}
-
-# We're going to shut off tainting for execute() with bind params
-# because I can't think of a good reason why a tainted bind param would
-# be dangerous (in general) and its really obnoxious to have to detaint
-# -all- your bind params.
-
-sub _untaint_execute {
-	my $sth = shift;
-	local $sth->{Taint} = 0;
-	return $sth->SUPER::execute(@_);
-}
-
-=back
-
-=head2 fetching
-
-The following are modifications or expansions on DBI's various fetch
-methods.  Most are simply context sensitive implementations.  Some
-just have shorter names.
-
-Remember that most of the list context versions of the fetch methods
-tend to use more memory and be slower.  Same with the fetchall
-methods.  Use with care.
-
-=over 4
-
-=item B<fetch>
-
-    $row_ref = $sth->fetch;
-    @row     = $sth->fetch;
-
-A context sensitive version of fetch().  When in scalar context, it
-will act as fetchrow_arrayref.  In list context it will use
-fetchrow_array.
-
-=cut
-
-#'#
-sub fetch {
-	my ($sth) = shift;
-	return wantarray
-		? $sth->SUPER::fetchrow_array
-		: $sth->SUPER::fetchrow_arrayref;
-}
-
-=pod
-
-=item B<fetch_hash>
-
-    $row_ref = $sth->fetch_hash;
-    %row     = $sth->fetch_hash;
-
-A modification on fetchrow_hashref.  When in scalar context, it acts
-just as fetchrow_hashref() does.  In list context it returns the
-complete hash.
-
-=cut
-
-sub fetch_hash {
-	my ($sth) = shift;
-	my $row = $sth->SUPER::fetchrow_hashref;
-	return unless defined $row;
-	return wantarray
-		? %$row
-		: $row;
-}
-
-=pod
-
-=item B<fetchall>
-
-    $rows_ref = $sth->fetchall;
-    @rows     = $sth->fetchall;
-
-A modification on fetchall_arrayref.  In scalar context it acts as
-fetchall_arrayref.  In list it returns an array of references to rows
-fetched.
-
-=cut
-
-sub fetchall {
-	my ($sth) = shift;
-	my $rows = $sth->SUPER::fetchall_arrayref;
-	return wantarray
-		? @$rows
-		: $rows;
-}
-
-=pod
-
-=item B<fetchall_hash>
-
-    $rows_ref = $sth->fetchall_hash;
-    @rows     = $sth->fetchall_hash;
-
-A mating of fetchall_arrayref() with fetchrow_hashref().  It gets all
-rows from the hash, each as hash references.  In scalar context it
-returns a reference to an array of hash references.  In list context
-it returns a list of hash references.
-
-=cut
-
-# There may be some code in DBI->fetchall_arrayref, but its undocumented.
-sub fetchall_hash {
-	my ($sth) = shift;
-	my (@rows, $row);
-	push @rows, $row while ($row = $sth->SUPER::fetchrow_hashref);
-	return wantarray ? @rows : \@rows;
-}
-
-sub select_row {
-	my ($sth, @args) = @_;
-	$sth->execute(@args);
-	my @row = $sth->fetchrow_array;
-	$sth->finish;
-	return @row;
-}
-
-sub select_col {
-	my ($sth, @args) = @_;
-	my (@row, $cur);
-	$sth->execute(@args);
-	$sth->bind_col(1, \$cur);
-	push @row, $cur while $sth->fetch;
-	$sth->finish;
-	return @row;
-}
-
-sub select_val {
-	my ($sth, @args) = @_;
-	return ($sth->select_row(@args))[0];
 }
 
 =pod

@@ -3,7 +3,7 @@ package My::DBI;
 $|++;
 use strict;
 use base 'Ima::DBI';
-use Test::More tests => 28;
+use Test::More tests => 27;
 
 sub new { return bless {}; }
 
@@ -50,7 +50,7 @@ my ($col0, $col1, $col2);
 # Test execute & fetch
 {
 	my $sth = $obj->sql_test2;
-	isa_ok $sth => 'Ima::DBI::st';
+	isa_ok $sth, 'DBIx::ContextualFetch::st';
 	ok $sth->{Taint}, "Taint mode on queries in db1";
 	ok $sth->execute([$dir], [ \($col0, $col1, $col2) ]), "Execute";
 	my @row_a = $sth->fetch;
@@ -85,7 +85,6 @@ my ($col0, $col1, $col2);
 # Test dynamic SQL generation.
 {
 	my $sth = $obj->sql_test3(join ',', qw/mode size name/);
-	isa_ok $sth, 'Ima::DBI::st';
 
 	ok !$sth->{Taint}, "Taint mode off for queries in db2";
 	my $new_sth = $obj->sql_test3(join ',', qw/mode size name/);
@@ -102,10 +101,10 @@ my ($col0, $col1, $col2);
 	isnt $new_sth, $sth, 'redefined statement';
 
 	$sth = $obj->sql_test4(join ',', qw/mode size name/);
-	isa_ok $sth, 'Ima::DBI::st';
+	isa_ok $sth, 'DBIx::ContextualFetch::st';
 
 	$new_sth = $obj->sql_test4(join ',', qw/mode size name/);
-	isa_ok $new_sth, 'Ima::DBI::st';
+	isa_ok $sth, 'DBIx::ContextualFetch::st';
 	isnt $new_sth, $sth, 'cached handles off';
 }
 
