@@ -5,7 +5,7 @@ eval {
     require Ima::DBI;
 };
 
-my $LAST_API_CHANGE = 0.04;
+my $LAST_API_CHANGE = 0.08;
 unless ($@) { # Make sure we did find the module.
     print <<"CHANGE_WARN" if $Ima::DBI::VERSION < $LAST_API_CHANGE;
 

@@ -1,15 +1,15 @@
 package Ima::DBI;
 
 use strict;
-use DBI 1.09;
+use DBI;
 use Carp;
-use Carp::Assert 0.06;
+use Carp::Assert;
 use Ima::DBI::utility;
 
 use vars qw($VERSION);
 
 BEGIN {
-    $VERSION = 0.10;
+    $VERSION = 0.14;
 }
 
 # Much of the real data about the handles is inside DBI.
@@ -283,7 +283,10 @@ db_$db_name... so, for example, __PACKAGE__->set_db("foo", ...) will
 create a method called db_foo().
 
 If no %attr is supplied (RaiseError => 1, AutoCommit => 0, PrintError
-=> 0) is assumed.  This is a better default IMHO.
+=> 0) is assumed.  This is a better default IMHO, however it does give
+databases without transactions (such as MySQL) a hard time.  Be sure
+to turn AutoCommit back on if your database does not support
+transactions.
 
 The actual database handle creation (and thus the database connection)
 is held off until a prepare is attempted with this handle.
@@ -358,9 +361,10 @@ sub set_sql {
     _taint_check($package, $sql_name, $db_name);
     
     # ------------------------- sql_* closure ----------------------- #
+	my $orig_db_name = $db_name;
 	$db_name =~ tr/ /_/;
     my $db  = $package->can("db_$db_name") or
-        die "There is no database connection named '$db_name' defined in $package";
+        die "There is no database connection named '$orig_db_name' defined in $package";
 	my $dbh;	# Database handle for the closure.
 	my $sth;	# Statement handle for the closure.
     no strict 'refs';
@@ -526,6 +530,24 @@ BEGIN { $VERSION = '0.04'; }
 
 =over 4
 
+=item B<prepare>
+
+   $sth = $dbh->prepare(...);
+
+Acts just like DBI's prepare except that it returns an Ima::DBI::st
+object.  Eventually, all database handle methods which return a
+statement handle will return an Ima::DBI::st.
+
+=cut
+
+sub prepare {
+   my ($self) = shift;
+   my $sth = $self->SUPER::prepare(@_);
+   bless $sth, "Ima::DBI::st";
+}
+
+=pod
+
 =item B<commit>         *UNIMPLEMENTED*
 
     $rc = $obj->commit;
@@ -601,6 +623,8 @@ BEGIN { $VERSION = '0.06'; }
 
 =pod
 
+=over 4
+
 =item B<execute>
 
     $rv = $sth->execute;
@@ -631,10 +655,16 @@ sub execute {
     my($sth) = shift;
     
     my $rv;
-    if( ref $_[0] eq 'ARRAY' && ref $_[1] eq 'ARRAY' ) {
+
+	# Allow $sth->execute(\@param, \@cols) and 
+	# $sth->execute(undef, \@cols) syntax.
+    if( @_ == 2 and 
+		(!defined $_[0] || ref $_[0] eq 'ARRAY') and
+		ref $_[1] eq 'ARRAY' ) 
+	{
         my($bind_params, $bind_cols) = @_;
         $rv = $sth->SUPER::execute(@$bind_params);
-        $sth->SUPER::bind_columns(undef, @$bind_cols);
+        $sth->SUPER::bind_columns(@$bind_cols);
     }
     else {
         # There should be no references
@@ -735,7 +765,7 @@ sub fetchall {
 
 =pod
 
-=item B<fetchall_hashref>
+=item B<fetchall_hash>
 
     $rows_ref = $sth->fetchall_hash;
     @rows     = $sth->fetchall_hash;
@@ -748,7 +778,7 @@ it returns a list of hash references.
 =cut
 
 # There may be some code in DBI->fetchall_arrayref, but its undocumented.
-sub fetchall_hashref {
+sub fetchall_hash {
     my($sth) = shift;
     my(@rows, $row);
     push @rows, $row while ($row = $sth->SUPER::fetchrow_hashref);
@@ -815,16 +845,27 @@ sub fetchall_hashref {
         $obj->rollback('Customers');
         warn "DBI failure:  $@";    
     }
-    
 
-=head1 TODO, Caveat, etc....
+
+=head1 TODO, Caveat, BUGS, etc....
 
 =over 4
+
+=item Ima::DBI::st has to remplace DBI::st where applicable.
+
+   $sth = $obj->db_foo->prepare(...);
+   @rows = $sth->fetchall;
+
+This won't work because $sth is, surprisingly, not an Ima::DBI::st object.
+I need to make sure things like this don't happen.  For now I'll do it on
+a case-by-case basis.
+
 
 =item Unstable Interface
 
 I haven't totally decided if I'm satisfied with the way this module
 works, so expect the worst, the interface will change.
+
 
 =item execute() extensions questionable
 

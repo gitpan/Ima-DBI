@@ -65,10 +65,9 @@ $sth->execute($dir);
 my %row_hash = $sth->fetch_hash;
 ok(0, keys %row_hash == 3);
 
-
 BEGIN {
     use vars qw($tests);  
-    $tests = 7;
+    $tests = 8;
     print "1..$tests\n";
 }
 

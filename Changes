@@ -1,4 +1,11 @@
 Revision history for Perl extension DBI::Ima.
+0.12  Mon Sep 20 18:04:58 EDT 1999
+	- Fixed that damned pod2man warning about "Unmatched =back" (thanks Addi)
+	- Lowered the restrictions on execute() to allow execute(undef, \@cols)
+
+0.11  Tue Jul 20 22:08:35 EDT 1999
+	- Added prepare() override to return Ima::DBI style statement handles.
+
 0.10  Mon Jul 19 20:04:04 EDT 1999
 	- Updated TODO list
 	- Added COPYRIGHT and licensing
