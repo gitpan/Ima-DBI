@@ -8,7 +8,7 @@ require Class::Data::Inheritable;
 use vars qw($VERSION @ISA);
 
 BEGIN {
-	$VERSION = '0.30';
+	$VERSION = '0.31';
 
 	# We accidentally inherit AutoLoader::AUTOLOAD from DBI.  Send it to
 	# the white hole.
@@ -827,6 +827,7 @@ sub select_col {
 	$sth->execute(@args);
 	$sth->bind_col(1, \$cur);
 	push @row, $cur while $sth->fetch;
+	$sth->finish;
 	return @row;
 }
 
