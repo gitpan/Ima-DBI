@@ -21,4 +21,4 @@ Please also read the perlmodinstall man page, if available.
 
 Requires:
     Carp::Assert    0.05 and up
-    DBI             1.07 and up
+    DBI             1.09 and up

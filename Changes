@@ -1,4 +1,10 @@
 Revision history for Perl extension DBI::Ima.
+0.10  Mon Jul 19 20:04:04 EDT 1999
+	- Updated TODO list
+	- Added COPYRIGHT and licensing
+	- Performance improvement by drastically reducting # of calls to
+	  DBI::prepare_cached
+
 0.09  Tue Jul 13 23:59:56 EDT 1999
 	- Major performance improvement by drasticly reducing # of calls to
 	  DBI::connect_cached.

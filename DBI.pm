@@ -1,15 +1,15 @@
 package Ima::DBI;
 
 use strict;
-use DBI 1.08;
+use DBI 1.09;
 use Carp;
-use Carp::Assert 0.05;
+use Carp::Assert 0.06;
 use Ima::DBI::utility;
 
 use vars qw($VERSION);
 
 BEGIN {
-    $VERSION = 0.09;
+    $VERSION = 0.10;
 }
 
 # Much of the real data about the handles is inside DBI.
@@ -276,7 +276,7 @@ pages for details.
 This method is used in place of DBI->connect to create your database handles.
 
 Sets up a new DBI database handle associated to $db_name.  All other
-arguments are passed through to DBI->connect_cached (See TODO below).
+arguments are passed through to DBI->connect_cached.
 
 A new method is created for each db you setup.  This new method is
 db_$db_name... so, for example, __PACKAGE__->set_db("foo", ...) will
@@ -362,6 +362,7 @@ sub set_sql {
     my $db  = $package->can("db_$db_name") or
         die "There is no database connection named '$db_name' defined in $package";
 	my $dbh;	# Database handle for the closure.
+	my $sth;	# Statement handle for the closure.
     no strict 'refs';
 	$sql_name =~ tr/ /_/;
     *{$package."::sql_$sql_name"} =
@@ -371,11 +372,25 @@ sub set_sql {
 			# functionality.
 			unless( $dbh && $dbh->FETCH('Active') && $dbh->ping ) {
 				$dbh = &$db;
+
+				# If the database connection died, we probably should
+				# reprepare.
+				$sth = $dbh->prepare_cached($statement);
+				bless $sth, 'Ima::DBI::st';
 			}
-            my $sth = $dbh->prepare_cached($statement);
-            
-            # This isn't the most pleasant thing in the universe to do.
-            return bless $sth, 'Ima::DBI::st';
+			# Calling prepare_cached over and over again is also expensive.
+			# Again, we co-opt some of prepare_cached's functionality.
+			elsif ( !$sth ) {	# No $sth defined yet.
+				$sth = $dbh->prepare_cached($statement);
+				bless $sth, 'Ima::DBI::st';
+			}
+			else {
+				# Check to see if the handle is active.
+				Carp::croak("prepare_cached($statement) statement handle $sth is still active")
+				  if $sth->FETCH('Active');
+			}
+
+			return $sth;
         };
     # ---------------------- end sql_* closure ---------------------- #
     
@@ -811,17 +826,6 @@ sub fetchall_hashref {
 I haven't totally decided if I'm satisfied with the way this module
 works, so expect the worst, the interface will change.
 
-=item DBI->connect_cached undocumented
-
-Ima::DBI uses DBI->connect_cached, an undocumented feature in DBI, to
-handle its cache to connections, just like prepare_cached does.
-Eventually this feature will mature, but right now (as of DBI 1.08)
-its a little risky.
-
-Update: DBI 1.08 contained connect_cached fixes and was supposed to
-contain docs, but didn't.  I expect that to be rectified in the next
-DBI version.
-
 =item execute() extensions questionable
 
 I'm not really sure the additional functionality added to execute() is
@@ -861,6 +865,14 @@ this problem.
 =head1 AUTHOR
 
 Michael G Schwern <schwern@pobox.com>
+
+
+=head1 COPYRIGHT
+
+This module is Copyright (c) 1998-1999 Michael G Schwern.
+USA.  All rights reserved.
+
+You may distribute under the same terms as Perl itself.
 
 
 =head1 THANKS TO
