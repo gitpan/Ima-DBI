@@ -9,7 +9,7 @@ use Ima::DBI::utility;
 use vars qw($VERSION);
 
 BEGIN {
-    $VERSION = 0.17;
+    $VERSION = '0.18';
 }
 
 
@@ -834,6 +834,7 @@ complete hash.
 sub fetch_hash {
     my($sth) = shift;
     my $row = $sth->SUPER::fetchrow_hashref;
+    return unless defined $row;
     return wantarray ? %$row
                      : $row;
 }

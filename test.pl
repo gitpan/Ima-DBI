@@ -66,9 +66,16 @@ $sth->finish;
 # Test fetch_hash
 $sth = $obj->sql_test2;
 $sth->execute($dir);
-my %row_hash = $sth->fetch_hash;
+my %row_hash;
+%row_hash = $sth->fetch_hash;
 ok(keys %row_hash == 3);
 
+eval {
+    while( my %row = $sth->fetch_hash ) { }
+};
+ok( !$@ ); # Make sure fetch_hash() doesn't blow up at the end of its fetching
+        
+    
 
 # Test dynamic SQL generation.
 $sth = $obj->sql_test3(join ',', qw(mode size name));
@@ -89,6 +96,6 @@ $sth->finish;
 
 BEGIN {
     use vars qw($tests);  
-    $tests = 15;
+    $tests = 16;
     print "1..$tests\n";
 }

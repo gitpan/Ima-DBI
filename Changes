@@ -1,4 +1,8 @@
 Revision history for Perl extension Ima::DBI.
+
+0.18  Thu Mar 16 16:04:11 EST 2000
+    * Ooops, bug in fetch_hash() in list context.
+
 0.17  Tue Feb 29 00:13:32 EST 2000
     * set_sql() and sql_*() will now deal with dynamic SQL statements much
       better.
