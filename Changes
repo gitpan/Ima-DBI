@@ -1,5 +1,8 @@
 Revision history for Perl extension Ima::DBI.
 
+0.28  Thu Dec  5 2002
+    - localising a tied variable leaks with old perls. Work around this.
+
 0.27  Sat Feb 16 11:55:23 GMT 2002
     - fix precedence bug with commit / rollback
         [thanks to Tim Ayers]

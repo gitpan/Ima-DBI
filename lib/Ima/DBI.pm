@@ -8,7 +8,7 @@ require Class::Data::Inheritable;
 use vars qw($VERSION @ISA);
 
 BEGIN {
-    $VERSION = '0.27';
+    $VERSION = '0.28';
 
     # We accidentally inherit AutoLoader::AUTOLOAD from DBI.  Send it to
     # the white hole.
@@ -725,12 +725,16 @@ sub _disallow_references {
 # We're going to shut off tainting for execute() with bind params
 # because I can't think of a good reason why a tainted bind param would
 # be dangerous (in general) and its really obnoxious to have to detaint
-# -all- your bind params.
+# -all- your bind params. This can't be done with local $sth->{Taint} as
+# localising a tied variable leaks under old perls :(
 
 sub _untaint_execute {
   my $sth = shift;
-  local $sth->{Taint} = 0;
-  return $sth->SUPER::execute(@_);
+	my $old_value = $sth->{Taint};
+	$sth->{Taint} = 0;
+  my $ret = $sth->SUPER::execute(@_);
+	$sth->{Taint} = $old_value;
+	return $ret;
 }
 
 =back
