@@ -1,5 +1,9 @@
 Revision history for Perl extension Ima::DBI.
 
+0.30  Sat Sep 27 11:15:28 BST 2003
+		- added (undocumented) select_row, select_col, select_val helper
+		  methods to $sth. These may change in a later release.
+
 0.29  Sun Jun 22 15:50:12 BST 2003
 		- Allow subclasses to provide their own transform_sql method
 

@@ -8,17 +8,16 @@ require Class::Data::Inheritable;
 use vars qw($VERSION @ISA);
 
 BEGIN {
-    $VERSION = '0.29';
+	$VERSION = '0.30';
 
-    # We accidentally inherit AutoLoader::AUTOLOAD from DBI.  Send it to
-    # the white hole.
-    @ISA = qw(Class::WhiteHole DBI Class::Data::Inheritable);
+	# We accidentally inherit AutoLoader::AUTOLOAD from DBI.  Send it to
+	# the white hole.
+	@ISA = qw(Class::WhiteHole DBI Class::Data::Inheritable);
 }
 
 # Some class data to store a per-class list of handles.
 Ima::DBI->mk_classdata('__Database_Names');
 Ima::DBI->mk_classdata('__Statement_Names');
-
 
 =head1 NAME
 
@@ -303,54 +302,53 @@ is held off until a prepare is attempted with this handle.
 sub _croak { my $self = shift; require Carp; Carp::croak(@_) }
 
 sub set_db {
-  my $class       = shift;
-  my $db_name     = shift or $class->_croak("Need a db name");
-     $db_name    =~ s/\s/_/g;
+	my $class = shift;
+	my $db_name = shift or $class->_croak("Need a db name");
+	$db_name =~ s/\s/_/g;
 
-  my $data_source = shift or $class->_croak("Need a data source");
-  my $user        = shift || "";
-  my $password    = shift || "";
-  my $attr        = shift || {};
-  ref $attr eq 'HASH' or $class->_croak("$attr must be a hash reference");
-  $attr = $class->_add_default_attributes($attr);
+	my $data_source = shift or $class->_croak("Need a data source");
+	my $user     = shift || "";
+	my $password = shift || "";
+	my $attr     = shift || {};
+	ref $attr eq 'HASH' or $class->_croak("$attr must be a hash reference");
+	$attr = $class->_add_default_attributes($attr);
 
-  $class->_remember_handle($db_name);
-  no strict 'refs';
-  *{$class."::db_$db_name"} =
-    $class->_mk_db_closure($data_source, $user, $password, $attr);
+	$class->_remember_handle($db_name);
+	no strict 'refs';
+	*{ $class . "::db_$db_name" } =
+		$class->_mk_db_closure($data_source, $user, $password, $attr);
 
-  return 1;
+	return 1;
 }
 
 sub _add_default_attributes {
-  my ($class, $user_attr) = @_;
-  my %attr = $class->_default_attributes;
-  @attr{keys %$user_attr} = values %$user_attr;
-  return \%attr;
+	my ($class, $user_attr) = @_;
+	my %attr = $class->_default_attributes;
+	@attr{ keys %$user_attr } = values %$user_attr;
+	return \%attr;
 }
-   
+
 sub _default_attributes {
-  ( RaiseError => 1, AutoCommit => 0, PrintError => 0, Taint => 1 )
+	(RaiseError => 1, AutoCommit => 0, PrintError => 0, Taint => 1);
 }
 
 sub _remember_handle {
-  my ($class, $db) = @_;
-  my $handles = $class->__Database_Names || [];
-  push @$handles, $db;
-  $class->__Database_Names($handles);
-}
-  
-sub _mk_db_closure {
-  my($class, @connection) = @_;
-  my $dbh;
-  return sub {
-    unless( $dbh && $dbh->FETCH('Active') && $dbh->ping ) {
-      $dbh = Ima::DBI->connect_cached(@connection);
-    }
-    return $dbh;
-  };
+	my ($class, $db) = @_;
+	my $handles = $class->__Database_Names || [];
+	push @$handles, $db;
+	$class->__Database_Names($handles);
 }
 
+sub _mk_db_closure {
+	my ($class, @connection) = @_;
+	my $dbh;
+	return sub {
+		unless ($dbh && $dbh->FETCH('Active') && $dbh->ping) {
+			$dbh = Ima::DBI->connect_cached(@connection);
+		}
+		return $dbh;
+	};
+}
 
 =pod
 
@@ -387,41 +385,41 @@ See sql_* below for more details.
 =cut
 
 sub set_sql {
-    my($class, $sql_name, $statement, $db_name, $cache) = @_;
-    $cache = 1 unless defined $cache;
+	my ($class, $sql_name, $statement, $db_name, $cache) = @_;
+	$cache = 1 unless defined $cache;
 
-    # ------------------------- sql_* closure ----------------------- #
-    my $db_meth = $db_name;
-    $db_meth =~ s/\s/_/g;
-    $db_meth = "db_$db_meth";
+	# ------------------------- sql_* closure ----------------------- #
+	my $db_meth = $db_name;
+	$db_meth =~ s/\s/_/g;
+	$db_meth = "db_$db_meth";
 
-    my $sql_meth = $sql_name;
-    $sql_meth =~ s/\s/_/g;
-    $sql_meth = "sql_$sql_name";
+	my $sql_meth = $sql_name;
+	$sql_meth =~ s/\s/_/g;
+	$sql_meth = "sql_$sql_name";
 
-    # Remember the name of this handle for the class.
-    my $handles = $class->__Statement_Names || [];
-    push @$handles, $sql_name;
-    $class->__Statement_Names($handles);
+	# Remember the name of this handle for the class.
+	my $handles = $class->__Statement_Names || [];
+	push @$handles, $sql_name;
+	$class->__Statement_Names($handles);
 
-    no strict 'refs';
-    *{$class."::$sql_meth"} = 
-      $class->_mk_sql_closure($sql_name, $statement, $db_meth, $cache);
+	no strict 'refs';
+	*{ $class . "::$sql_meth" } =
+		$class->_mk_sql_closure($sql_name, $statement, $db_meth, $cache);
 
-    return 1;
+	return 1;
 }
 
-
 sub _mk_sql_closure {
-	my($class, $sql_name, $statement, $db_meth, $cache) = @_;
+	my ($class, $sql_name, $statement, $db_meth, $cache) = @_;
 
 	return sub {
 		my $class = shift;
-		my $dbh = $class->$db_meth();
+		my $dbh   = $class->$db_meth();
+
 		# Everything must pass through sprintf, even if @_ is empty.
 		# This is to do proper '%%' translation.
 		my $sql = $class->transform_sql($statement => @_);
-		return $cache 
+		return $cache
 			? $dbh->prepare_cached($sql)
 			: $dbh->prepare($sql);
 	};
@@ -431,7 +429,6 @@ sub transform_sql {
 	my ($class, $sql, @args) = @_;
 	return sprintf $sql, @args;
 }
-	
 
 =item B<db_names>
 
@@ -464,12 +461,12 @@ These both work as either class or object methods.
 
 =cut
 
-sub db_names { @{$_[0]->__Database_Names || []} }
+sub db_names { @{ $_[0]->__Database_Names || [] } }
 
 sub db_handles {
-  my($self, @db_names) = @_;
-  @db_names = $self->db_names unless @db_names;
-  return map $self->$_(), map "db_$_", @db_names;
+	my ($self, @db_names) = @_;
+	@db_names = $self->db_names unless @db_names;
+	return map $self->$_(), map "db_$_", @db_names;
 }
 
 =item B<sql_names>
@@ -484,7 +481,7 @@ arguments to pass in.
 
 =cut
 
-sub sql_names { @{$_[0]->__Statement_Names || []} }
+sub sql_names { @{ $_[0]->__Statement_Names || [] } }
 
 =back
 
@@ -560,14 +557,14 @@ Most useful like this:
 =cut
 
 sub DBIwarn {
-    my($self, $thing, $doing) = @_;
-    my $errstr = "Failure while doing '$doing' with '$thing'\n";
-    $errstr .= $@ if $@;
+	my ($self, $thing, $doing) = @_;
+	my $errstr = "Failure while doing '$doing' with '$thing'\n";
+	$errstr .= $@ if $@;
 
-    require Carp;
-    Carp::carp $errstr;
+	require Carp;
+	Carp::carp $errstr;
 
-    return 1;
+	return 1;
 }
 
 =back
@@ -599,8 +596,8 @@ If all the commits succeeded it returns true, false otherwise.
 =cut
 
 sub commit {
-  my($self, @db_names) = @_;
-  return grep(!$_, map $_->commit, $self->db_handles(@db_names)) ? 0 : 1;
+	my ($self, @db_names) = @_;
+	return grep(!$_, map $_->commit, $self->db_handles(@db_names)) ? 0 : 1;
 }
 
 =pod
@@ -620,10 +617,9 @@ If all the rollbacks succeeded it returns true, false otherwise.
 =cut
 
 sub rollback {
-  my($self, @db_names) = @_;
-  return grep(!$_, map $_->rollback, $self->db_handles(@db_names)) ? 0 : 1;
+	my ($self, @db_names) = @_;
+	return grep(!$_, map $_->rollback, $self->db_handles(@db_names)) ? 0 : 1;
 }
-
 
 ################################ Ima::DBI::db #############################
 ###################### DBI database handle subclass #######################
@@ -679,45 +675,44 @@ must perform the bind_param, execute, bind_col sequence yourself.
 =cut
 
 sub execute {
-    my($sth) = shift;
+	my ($sth) = shift;
 
-    my $rv;
+	my $rv;
 
-    # Allow $sth->execute(\@param, \@cols) and 
-    # $sth->execute(undef, \@cols) syntax.
-    if( @_ == 2 and 
-        (!defined $_[0] || ref $_[0] eq 'ARRAY') and
-        ref $_[1] eq 'ARRAY' ) 
-    {
-        my($bind_params, $bind_cols) = @_;
-        $rv = $sth->_untaint_execute(@$bind_params);
-        $sth->SUPER::bind_columns(@$bind_cols);
-    } else {
-        $sth->_disallow_references(@_);
-        $rv = $sth->_untaint_execute(@_);
-    }
-    return $rv;
+	# Allow $sth->execute(\@param, \@cols) and
+	# $sth->execute(undef, \@cols) syntax.
+	if (  @_ == 2
+		and (!defined $_[0] || ref $_[0] eq 'ARRAY')
+		and ref $_[1] eq 'ARRAY') {
+		my ($bind_params, $bind_cols) = @_;
+		$rv = $sth->_untaint_execute(@$bind_params);
+		$sth->SUPER::bind_columns(@$bind_cols);
+		} else {
+		$sth->_disallow_references(@_);
+		$rv = $sth->_untaint_execute(@_);
+	}
+	return $rv;
 }
 
 sub _disallow_references {
-  my $self = shift;
-  foreach (@_) {
-    next unless ref $_;
-    next if overload::Method($_,q{""});
-    next if overload::Method($_,q{0+});
-    die "Cannot call execute with a reference ($_)\n";
-  }
+	my $self = shift;
+	foreach (@_) {
+		next unless ref $_;
+		next if overload::Method($_, q{""});
+		next if overload::Method($_, q{0+});
+		die "Cannot call execute with a reference ($_)\n";
+	}
 }
-  
+
 # We're going to shut off tainting for execute() with bind params
 # because I can't think of a good reason why a tainted bind param would
 # be dangerous (in general) and its really obnoxious to have to detaint
 # -all- your bind params.
 
 sub _untaint_execute {
-  my $sth = shift;
-  local $sth->{Taint} = 0;
-  return $sth->SUPER::execute(@_);
+	my $sth = shift;
+	local $sth->{Taint} = 0;
+	return $sth->SUPER::execute(@_);
 }
 
 =back
@@ -747,9 +742,10 @@ fetchrow_array.
 
 #'#
 sub fetch {
-    my($sth) = shift;
-    return wantarray ? $sth->SUPER::fetchrow_array
-                     : $sth->SUPER::fetchrow_arrayref;
+	my ($sth) = shift;
+	return wantarray
+		? $sth->SUPER::fetchrow_array
+		: $sth->SUPER::fetchrow_arrayref;
 }
 
 =pod
@@ -766,11 +762,12 @@ complete hash.
 =cut
 
 sub fetch_hash {
-    my($sth) = shift;
-    my $row = $sth->SUPER::fetchrow_hashref;
-    return unless defined $row;
-    return wantarray ? %$row
-                     : $row;
+	my ($sth) = shift;
+	my $row = $sth->SUPER::fetchrow_hashref;
+	return unless defined $row;
+	return wantarray
+		? %$row
+		: $row;
 }
 
 =pod
@@ -787,10 +784,11 @@ fetched.
 =cut
 
 sub fetchall {
-    my($sth) = shift;
-    my $rows = $sth->SUPER::fetchall_arrayref;
-    return wantarray ? @$rows
-                     : $rows;
+	my ($sth) = shift;
+	my $rows = $sth->SUPER::fetchall_arrayref;
+	return wantarray
+		? @$rows
+		: $rows;
 }
 
 =pod
@@ -809,10 +807,32 @@ it returns a list of hash references.
 
 # There may be some code in DBI->fetchall_arrayref, but its undocumented.
 sub fetchall_hash {
-    my($sth) = shift;
-    my(@rows, $row);
-    push @rows, $row while ($row = $sth->SUPER::fetchrow_hashref);
-    return wantarray ? @rows : \@rows;
+	my ($sth) = shift;
+	my (@rows, $row);
+	push @rows, $row while ($row = $sth->SUPER::fetchrow_hashref);
+	return wantarray ? @rows : \@rows;
+}
+
+sub select_row {
+	my ($sth, @args) = @_;
+	$sth->execute(@args);
+	my @row = $sth->fetchrow_array;
+	$sth->finish;
+	return @row;
+}
+
+sub select_col {
+	my ($sth, @args) = @_;
+	my (@row, $cur);
+	$sth->execute(@args);
+	$sth->bind_col(1, \$cur);
+	push @row, $cur while $sth->fetch;
+	return @row;
+}
+
+sub select_val {
+	my ($sth, @args) = @_;
+	return ($sth->select_row(@args))[0];
 }
 
 =pod
