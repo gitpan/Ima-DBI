@@ -1,8 +1,7 @@
 Changes
-DBI.pm
 MANIFEST
 README
 INSTALL
 Makefile.PL
 t/DBI.t
-lib/Ima/DBI/utility.pm
+lib/Ima/DBI.pm

@@ -1,11 +1,8 @@
 use ExtUtils::MakeMaker;
-# See lib/ExtUtils/MakeMaker.pm for details of how to influence
-# the contents of the Makefile that is written.
-eval {
-    require Ima::DBI;
-};
 
 my $LAST_API_CHANGE = 0.08;
+
+eval { require Ima::DBI; };
 unless ($@) { # Make sure we did find the module.
     print <<"CHANGE_WARN" if $Ima::DBI::VERSION < $LAST_API_CHANGE;
 
@@ -17,16 +14,17 @@ CHANGE_WARN
 }
 
 WriteMakefile(
-          'NAME'        => 'Ima::DBI',
-          'VERSION_FROM'  => 'DBI.pm', # finds $VERSION
-          'PREREQ_PM'  => { DBI => 1.09,
-                            Carp::Assert        => 0.05,
-                            Carp                => 0,
-                            Class::WhiteHole    => 0.03,
-                            Class::Data::Inheritable => 0.02,
-                          },
-          'dist'      =>   {COMPRESS => 'gzip -9',
-                            SUFFIX   => '.gz',
-                            DIST_DEFAULT => 'all tardist',
-                           },
-         );
+  NAME          => 'Ima::DBI',
+  VERSION_FROM  => 'lib/Ima/DBI.pm', 
+  PREREQ_PM     => { 
+    DBI                      => 1.09,
+    Class::WhiteHole         => 0.03,
+    Class::Data::Inheritable => 0.02,
+    Test::More               => 0.18,
+  },
+  ($] > 5.005 ? () : (
+    ABSTRACT_FROM => 'lib/Ima/DBI.pm',
+    AUTHOR        => 'Tony Bowden <kasei@tmtm.com>',
+  )),
+
+);

@@ -1,4 +1,13 @@
 Revision history for Perl extension Ima::DBI.
+
+0.26  Sat Oct  6 12:38:21 BST 2001
+   [now maintainted by Tony Bowden]
+
+    - Allow setting with overloaded values 
+    - Lots of doc patches by Wesley Darlington
+    - Switch tests to Test::More
+    - removed Ima::DBI::utility
+
 0.25  Sun Apr  8 23:55:15 BST 2001
     - Fixed a minor bug with %% in SQL
     - Cleaned up the docs a bit

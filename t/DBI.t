@@ -1,47 +1,23 @@
-# Before `make install' is performed this script should be runnable with
-# `make test'. After `make install' it should work as `perl test.pl'
-
-######################### We start with some black magic to print on failure.
-
-# Change 1..1 below to 1..last_test_to_print .
-# (It may become useful if the test is moved to ./t subdirectory.)
-
-END {print "not ok 1\n" unless $loaded;}
-use Ima::DBI;
-$loaded = 1;
-print "ok 1\n";
-
-######################### End of black magic.
-
-
 package My::DBI;
 
-use base qw(Ima::DBI);
+$|++;
 use strict;
+use base 'Ima::DBI';
+use Test::More tests => 25;
 
 sub new { return bless {}; }
 
-my $test_num = 2;
-sub ok {
-    my($test, $name) = @_;
-    print "not " unless $test;
-    print "ok $test_num";
-    print " - $name" if defined $name;
-    print "\n";
-    $test_num++;
-}
-
 # Test set_db
-__PACKAGE__->set_db('test1', 'dbi:ExampleP:', '', '', {AutoCommit => 1});
-__PACKAGE__->set_db('test2', 'dbi:ExampleP:', '', '', {AutoCommit => 1,foo=>1});
-ok(__PACKAGE__->can('db_test1'),                'set_db("test1")');
-ok(__PACKAGE__->can('db_test2'),                'set_db("test2")');
+__PACKAGE__->set_db('test1', 'dbi:ExampleP:', '', '', {AutoCommit=>1,Taint=>0});
+__PACKAGE__->set_db('test2', 'dbi:ExampleP:', '', '', {AutoCommit=>1,foo=>1});
 
-ok(join('', sort __PACKAGE__->db_names) eq join('', sort qw(test1 test2)),
-                                                              'db_names');
-ok(join('', sort __PACKAGE__->db_handles) eq
-   join('', sort (__PACKAGE__->db_test1, __PACKAGE__->db_test2)),
-                                                              'db_handles');
+ok(__PACKAGE__->can('db_test1'),  'set_db("test1")');
+ok(__PACKAGE__->can('db_test2'),  'set_db("test2")');
+
+ok eq_array([sort __PACKAGE__->db_names], [sort qw/test1 test2/]), 'db_names';
+ok eq_array([sort __PACKAGE__->db_handles], 
+            [sort (__PACKAGE__->db_test1, __PACKAGE__->db_test2)]), 
+            'db_handles';
 
 # Test set_sql
 __PACKAGE__->set_sql('test1', 'select foo from bar where yar = ?', 'test1');
@@ -49,103 +25,93 @@ __PACKAGE__->set_sql('test2', 'select mode,size,name from ?', 'test2');
 __PACKAGE__->set_sql('test3', 'select %s from ?', 'test1');
 __PACKAGE__->set_sql('test4', 'select %s from ?', 'test1', 0);
 __PACKAGE__->set_sql('test5', 'select mode,size,name from ?', 'test1');
-ok(__PACKAGE__->can('sql_test1'));
-ok(__PACKAGE__->can('sql_test2'));
-ok(__PACKAGE__->can('sql_test3'));
-ok(__PACKAGE__->can('sql_test4'));
 
-ok(join('', sort __PACKAGE__->sql_names) eq
-   join('', sort qw(test1 test2 test3 test4 test5)),
-                                                              'sql_names');
+for (1 .. 5) {
+  ok __PACKAGE__->can("sql_test$_"), "SQL for test$_ set up";
+}
 
+ok eq_array([sort __PACKAGE__->sql_names], 
+            [sort qw/test1 test2 test3 test4 test5/]),
+            'sql_names';
 
 my $obj = My::DBI->new;
 
 # Test sql_*
-my $sth = $obj->sql_test2;
-ok($sth->isa('Ima::DBI::st'));
 
-# Test execute & fetch
 use Cwd;
 my $dir = cwd();
-my($col0, $col1, $col2);
-$sth->execute([$dir], [\($col0, $col1, $col2)]);
-my(@row_a) = $sth->fetch;
-ok($row_a[0] eq $col0);
-ok($row_a[1] eq $col1);
-ok($row_a[2] eq $col2);
-$sth->finish;
+my ($col0, $col1, $col2);
+
+# Test execute & fetch
+{
+  my $sth = $obj->sql_test2;
+  isa_ok $sth => 'Ima::DBI::st';
+  ok $sth->{Taint}, "Taint mode on queries in db1";
+  ok $sth->execute([$dir], [\($col0, $col1, $col2)]), "Execute";
+  my @row_a = $sth->fetch;
+  ok eq_array(\@row_a, [($col0, $col1, $col2)]), "Values OK";
+  $sth->finish;
+}
 
 # Test fetch_hash
-$sth = $obj->sql_test2;
-$sth->execute($dir);
-my %row_hash;
-%row_hash = $sth->fetch_hash;
-ok(keys %row_hash == 3);
-
-eval {
-    while( my %row = $sth->fetch_hash ) { }
-};
-ok( !$@ ); # Make sure fetch_hash() doesn't blow up at the end of its fetching
-
+{ 
+  my $sth = $obj->sql_test2;
+     $sth->execute($dir);
+  my %row_hash = $sth->fetch_hash;
+  is keys %row_hash, 3, "3 values fetched back in hash";
+  eval {
+    1 while (my %row = $sth->fetch_hash);
+  };
+  ok(!$@, "fetch_hash() doesn't blow up at the end of its fetching");
+}
 
 # Test dynamic SQL generation.
-$sth = $obj->sql_test3(join ',', qw(mode size name));
-ok( $sth->isa('Ima::DBI::st') );
+{
+  my $sth = $obj->sql_test3(join ',', qw/mode size name/);
+  isa_ok $sth, 'Ima::DBI::st';
 
-my $new_sth = $obj->sql_test3(join ',', qw(mode size name));
-ok( $new_sth eq $sth,                           'cached handles' );
+  ok !$sth->{Taint}, "Taint mode off for queries in db2";
+  my $new_sth = $obj->sql_test3(join ',', qw/mode size name/);
+  is $new_sth, $sth, 'Cached handles';
 
-# $sth->clear_cache;
-#my $another_sth = $obj->sql_test3(join ', ', qw(mode size name));
-#ok( $another_sth ne $sth,                       '$sth->clear_cache' );
+  # TODO: {
+    # local $TODO = "Clear sth cache";
+    # $sth->clear_cache;
+    # my $another_sth = $obj->sql_test3(join ', ', qw/mode size name/);
+    # isnt $another_sth, $sth, 'Get a new sth after clearing cache';
+  # }
 
-$new_sth = $obj->sql_test3(join ', ', qw(mode name));
-ok( $new_sth ne $sth,                           'redefined statement' );
+  $new_sth = $obj->sql_test3(join ', ', qw/mode name/);
+  isnt $new_sth, $sth, 'redefined statement';
 
-$sth = $obj->sql_test4(join ',', qw(mode size name));
-ok( $sth->isa('Ima::DBI::st') );
+  $sth = $obj->sql_test4(join ',', qw/mode size name/);
+  isa_ok $sth, 'Ima::DBI::st';
 
-$new_sth = $obj->sql_test4(join ',', qw(mode size name));
-ok( $new_sth->isa('Ima::DBI::st') );
-ok( $new_sth ne $sth,                           'cached handles off' );
+  $new_sth = $obj->sql_test4(join ',', qw/mode size name/);
+  isa_ok $new_sth, 'Ima::DBI::st';
+  isnt $new_sth, $sth, 'cached handles off';
+}
 
+{ 
+  my $dbh = __PACKAGE__->db_test1;
+  my $sth5 = __PACKAGE__->sql_test5;
+  my $new_dbh = __PACKAGE__->db_test1;
+  is $dbh, $new_dbh, 'dbh handle caching';
 
-my $dbh = __PACKAGE__->db_test1;
-my $sth5 = __PACKAGE__->sql_test5;
-
-my $new_dbh = __PACKAGE__->db_test1;
-ok( $dbh eq $new_dbh,                           'dbh handle caching');
-
-#$dbh->clear_cache;
-#my $another_dbh = __PACKAGE__->db_test1;
-#ok( $another_dbh ne $dbh,                       '$dbh->clear_cache');
-
-#my $new_sth5 = __PACKAGE__->sql_test5;
-#ok( $sth5 ne $new_sth5,                         '  handles flushed, too');
-
-
-
-# Same as before.
-# Test execute & fetch
-use Cwd;
-$dir = cwd();
-$sth->execute([$dir], [\($col0, $col1, $col2)]);
-@row_a = $sth->fetch;
-ok($row_a[0] eq $col0);
-ok($row_a[1] eq $col1);
-ok($row_a[2] eq $col2);
-$sth->finish;
+  # TODO: {
+    # local $TODO = "Clear dbh cache";
+    # $dbh->clear_cache;
+    # my $another_dbh = __PACKAGE__->db_test1;
+    # isnt $another_dbh, $dbh, '$dbh->clear_cache';
+  # 
+    # my $new_sth5 = __PACKAGE__->sql_test5;
+    # isnt $sth5, $new_sth5, '  handles flushed, too';
+  # }
+}
 
 eval {
     Ima::DBI->i_dont_exist;
 };
 # There's some odd precedence problem trying to pass this all at once.
 my $ok = $@ =~ /^Can\'t locate object method "i_dont_exist" via package/;
-ok( $ok, 'Accidental AutoLoader inheritance blocked' );
-
-BEGIN {
-    use vars qw($tests);
-    $tests = 27;
-    print "1..$tests\n";
-}
+ok $ok, 'Accidental AutoLoader inheritance blocked';

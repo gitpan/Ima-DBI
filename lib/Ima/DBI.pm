@@ -2,15 +2,13 @@ package Ima::DBI;
 
 use strict;
 use DBI;
-use Carp::Assert;
 require Class::WhiteHole;
 require Class::Data::Inheritable;
-use Ima::DBI::utility;
 
 use vars qw($VERSION @ISA);
 
 BEGIN {
-    $VERSION = '0.25';
+    $VERSION = '0.26';
 
     # We accidentally inherit AutoLoader::AUTOLOAD from DBI.  Send it to
     # the white hole.
@@ -28,7 +26,6 @@ Ima::DBI->mk_classdata('__Statement_Names');
 =head1 NAME
 
 Ima::DBI - Database connection caching and organization
-
 
 =head1 SYNOPSIS
 
@@ -93,24 +90,23 @@ Ima::DBI - Database connection caching and organization
 
 =head1 DESCRIPTION
 
-Ima::DBI attempts to organize and facilitate caching and more
-efficient use of database connections and statement handles by
-storing DBI and SQL information with your class (instead of as
-seperate objects).  This allows you to pass around just one object
-without worrying about a trail of DBI handles behind it.
+Ima::DBI attempts to organize and facilitate caching and more efficient
+use of database connections and statement handles by storing DBI and
+SQL information with your class (instead of as seperate objects).
+This allows you to pass around just one object without worrying about
+a trail of DBI handles behind it.
 
 One of the things I always found annoying about writing large programs
 with DBI was making sure that I didn't have duplicate database handles
 open.  I was also annoyed by the somewhat wasteful nature of the
 prepare/execute/finish route I'd tend to go through in my subroutines.
-The new DBI->connect_cached and DBI->prepare_cached helped alot, but I
-still had to throw around global datasource, username and password
+The new DBI->connect_cached and DBI->prepare_cached helped a lot, but
+I still had to throw around global datasource, username and password
 information.
 
 So, after a while I grew a small library of DBI helper routines and
-techniques.  Ima::DBI is the culmination of all this, put into a
-nice(?), clean(?) class to be inherited from.
-
+techniques.  Ima::DBI is the culmination of all this, put into a nice(?),
+clean(?) class to be inherited from.
 
 =head2 Why should I use this thing?
 
@@ -121,20 +117,19 @@ explain why you'd want to use this thing...
 
 =item * Consolidation of all SQL statements and database information
 
-No matter what, embedding one language into another is messy.  DBI
-alleviates this somewhat, but I've found a tendency to have that
+No matter what, embedding one language into another is messy.
+DBI alleviates this somewhat, but I've found a tendency to have that
 scatter the SQL around inside the Perl code.  Ima::DBI allows you to
 easily group the SQL statements in one place where they are easier to
-maintain (especially if one developer is writing the SQL, another
-writing the Perl).  Alternatively, you can place your SQL statement
-alongside the code which uses it.  Whatever floats your boat.
+maintain (especially if one developer is writing the SQL, another writing
+the Perl).  Alternatively, you can place your SQL statement alongside
+the code which uses it.  Whatever floats your boat.
 
 Database connection information (data source, username, password,
 atrributes, etc...) can also be consolidated together and tracked.
 
-Both the SQL and the connection info are probably going to change
-alot, so having them well organized and easy to find in the code is a
-Big Help.
+Both the SQL and the connection info are probably going to change a lot,
+so having them well organized and easy to find in the code is a Big Help.
 
 =item * Holds off opening a database connection until necessary.
 
@@ -144,8 +139,8 @@ you actually prepare a statement on that connection.
 
 This is obviously very good for programs that sometimes never touch
 the database.  It's also good for code that has lots of possible
-connections and statements, but which typically only use a few.  Kinda
-like an autoloader.
+connections and statements, but which typically only use a few.
+Kinda like an autoloader.
 
 =item * Easy integration of the DBI handles into your class
 
@@ -167,59 +162,58 @@ could be passed to $sth->prepare().  For example:
     $user = get_user_data_from_the_outside_world;
     $sth = $dbh->prepare('DELETE FROM Users WHERE User = $user');
 
-Looks innocent enough... but what if $user was the string "1 OR User
-LIKE %".  You just blew away all your users, hope you have backups.
+Looks innocent enough... but what if $user was the string "1 OR User LIKE
+'%'".  You just blew away all your users. Hope you have backups.
 
 Ima::DBI turns on the DBI->connect Taint attribute so that all DBI
 methods (except execute()) will no longer accept tainted data.
-L<DBI/Taint> for details.
+See L<DBI/Taint> for details.
 
 =item * Taints returned data
 
-Databases should be like any other system call.  Its the scary Outside
-World, thus it should be tainted.  Simp.  Ima::DBI turns on DBI's
-Taint attribute on each connection.  This feature is overridable by
-passing your own Taint attribute to set_db as normal for DBI.
-L<DBI/Taint> for details.
+Databases should be like any other system call.  It's the scary Outside
+World, thus it should be tainted.  Simple.  Ima::DBI turns on DBI's Taint
+attribute on each connection.  This feature is overridable by passing
+your own Taint attribute to set_db as normal for DBI.  See L<DBI/Taint>
+for details.
 
-=item * Encapsulation of some of the more repetative bits of everyday DBI usage
+=item * Encapsulation of some of the more repetitive bits of everyday DBI usage
 
-I get lazy alot and I forget to do things I really should, like using
+I get lazy a lot and I forget to do things I really should, like using
 bind_cols(), or rigorous error checking.  Ima::DBI does some of this
-stuff automaticly, other times it just makes it more convenient.
+stuff automatically, other times it just makes it more convenient.
 
 =item * Encapsulation of DBI's cache system
 
-DBI's automatic handle caching system is relatively new, some people
+DBI's automatic handle caching system is relatively new, and some people
 aren't aware of its use.  Ima::DBI uses it automatically, so you don't
-have to worry your pretty little head about it.  (It even makes it a bit
-more efficient)
+have to worry about it. (It even makes it a bit more efficient)
 
 =item * Sharing of database and sql information amongst inherited classes
 
-Any SQL statements and connections created by a class is available to
+Any SQL statements and connections created by a class are available to
 its children via normal method inheritance.
 
-=item * Convenience and orthoganality amongst statement handle methods
+=item * Convenience and orthogonality amongst statement handle methods
 
 It always struck me odd that DBI didn't take much advantage of Perl's
 context sensitivity.  Ima::DBI redefines some of the various fetch
-methods to fix this oversight; it also adds a few new methods for
+methods to fix this oversight. It also adds a few new methods for
 convenience (though not necessarily efficiency).
 
 =item * Guarantees one connection per program.
 
-One program, one database connection (per database user).  One
-program, one prepared statement handle (per statement, per database
-user).  That's what Ima::DBI enforces.  Extremely handy in persistant
-environments (servers, daemons, mod_perl, FastCGI, etc...)
+One program, one database connection (per database user).  One program,
+one prepared statement handle (per statement, per database user).
+That's what Ima::DBI enforces.  Extremely handy in persistant environments
+(servers, daemons, mod_perl, FastCGI, etc...)
 
 =item * Encourages use of bind parameters and columns
 
 Bind parameters are safer and more efficient than embedding the column
 information straight into the SQL statement.  Bind columns are more
-efficient than normal fetching.  Ima::DBI pretty much requires the
-usage of the former, and eases the use of the latter.
+efficient than normal fetching.  Ima::DBI pretty much requires the usage
+of the former, and eases the use of the latter.
 
 =back
 
@@ -278,17 +272,15 @@ to retreive database handles ($dbh).
 
 =back
 
-Have a look at the L<EXAMPLE> below.
-
+Have a look at L<EXAMPLE> below.
 
 =head1 TAINTING
 
 Ima::DBI, by default, uses DBI's Taint flag on all connections.
 
-This means that no Ima::DBI method will accept tainted data and all
+This means that Ima::DBI methods do not accept tainted data, and that all
 data fetched from the database will be tainted.  This may be different
-from the DBI behavior you're used to.  L<DBI/Taint> for details.
-
+from the DBI behavior you're used to.  See L<DBI/Taint> for details.
 
 =head1 METHODS
 
@@ -301,14 +293,14 @@ from the DBI behavior you're used to.  L<DBI/Taint> for details.
     Foo->set_db($db_name, $data_source, $user, $password);
     Foo->set_db($db_name, $data_source, $user, $password, \%attr);
 
-This method is used in place of DBI->connect to create your database handles.
+This method is used in place of DBI->connect to create your database
+handles. It sets up a new DBI database handle associated to $db_name.
+All other arguments are passed through to DBI->connect_cached.
 
-Sets up a new DBI database handle associated to $db_name.  All other
-arguments are passed through to DBI->connect_cached.
-
-A new method is created for each db you setup.  This new method is
-db_$db_name... so, for example, Foo->set_db("foo", ...) will
-create a method called db_foo().
+A new method is created for each db you setup.  This new method is called
+"db_$db_name"... so, for example, Foo->set_db("foo", ...) will create
+a method called "db_foo()". (Spaces in $db_name will be translated into
+underscores: '_')
 
 %attr is combined with a set of defaults (RaiseError => 1, AutoCommit
 => 0, PrintError => 0, Taint => 1).  This is a better default IMHO,
@@ -319,50 +311,69 @@ not support transactions.
 The actual database handle creation (and thus the database connection)
 is held off until a prepare is attempted with this handle.
 
-Spaces in $db_name will be translated into underscores ('_')
-
 =cut
 
-#'#
-sub set_db {
-    my($class, $db_name, $data_source, $user, $password, $attr) = @_;
+sub _croak { my $self = shift; require Carp; Carp::croak(@_) }
 
-    # The rest will be delt with by DBI better than I can.
-    _taint_check($class, $db_name);
-
-    assert(5 <= @_ && @_ <= 6) if DEBUG;
-    assert(!defined $attr or ref $attr eq 'HASH') if DEBUG;
-
-    # Join the user's %attr with our defaults.
-    $attr = {} unless defined $attr;
-    $attr = { RaiseError => 1, AutoCommit => 0, PrintError => 0, Taint => 1,
-              %$attr };
-
-    $db_name =~ s/\s/_/g;
-
-    # Remember the name of this handle for the class.
-    my $handles = $class->__Database_Names || [];
-    push @$handles, $db_name;
-    $class->__Database_Names($handles);
-
-    no strict 'refs';
-    *{$class."::db_$db_name"} =
-      $class->_mk_db_closure($data_source, $user, $password, $attr);
-
-    return SUCCESS;
+# NOT rigorous enough. But DBI itself takes care of most of the
+# important ones for us.
+sub _taint_check {
+  my $self = shift;
+  unless(eval { () = join('',@_), kill 0; 1; }) {
+    require Carp;
+    Carp::croak("Insecure dependency");
+  }
+  return;
 }
 
+sub set_db {
+  my $class       = shift;
+  my $db_name     = shift or $class->_croak("Need a db name");
+     $db_name    =~ s/\s/_/g;
+     $class->_taint_check($db_name);
+
+  my $data_source = shift or $class->_croak("Need a data source");
+  my $user        = shift || "";
+  my $password    = shift || "";
+  my $attr        = shift || {};
+  ref $attr eq 'HASH' or $class->_croak("$attr must be a hash reference");
+  $attr = $class->_add_default_attributes($attr);
+
+  $class->_remember_handle($db_name);
+  no strict 'refs';
+  *{$class."::db_$db_name"} =
+    $class->_mk_db_closure($data_source, $user, $password, $attr);
+
+  return 1;
+}
+
+sub _add_default_attributes {
+  my ($class, $user_attr) = @_;
+  my %attr = $class->_default_attributes;
+  @attr{keys %$user_attr} = values %$user_attr;
+  return \%attr;
+}
+   
+sub _default_attributes {
+  ( RaiseError => 1, AutoCommit => 0, PrintError => 0, Taint => 1 )
+}
+
+sub _remember_handle {
+  my ($class, $db) = @_;
+  my $handles = $class->__Database_Names || [];
+  push @$handles, $db;
+  $class->__Database_Names($handles);
+}
+  
 sub _mk_db_closure {
-    my($class, @connection) = @_;
-
-    my $dbh;
-    return sub {
-          unless( $dbh && $dbh->FETCH('Active') && $dbh->ping ) {
-	      $dbh = Ima::DBI->connect_cached(@connection);
-	  }
-
-	  return $dbh;
-    };
+  my($class, @connection) = @_;
+  my $dbh;
+  return sub {
+    unless( $dbh && $dbh->FETCH('Active') && $dbh->ping ) {
+      $dbh = Ima::DBI->connect_cached(@connection);
+    }
+    return $dbh;
+  };
 }
 
 
@@ -374,43 +385,38 @@ sub _mk_db_closure {
     Foo->set_sql($sql_name, $statement, $db_name, $cache);
 
 This method is used in place of DBI->prepare to create your statement
-handles.
-
-Sets up a new statement handle using associated to $sql_name using the
-database connection associated with $db_name.  $statement is passed
+handles. It sets up a new statement handle associated to $sql_name using
+the database connection associated with $db_name.  $statement is passed
 through to either DBI->prepare or DBI->prepare_cached (depending on
 $cache) to create the statement handle.
 
-If $cache is true or isn't given then prepare_cached() will be used to
-prepare the statement handle and it will be cached.  If $cache is
-false then a normal prepare() will be used and the statement handle
-will be recompiled on every sql_*() call.  If you have a statement
-which changes alot or is used very infrequently you might not want it
-cached.
+If $cache is true or isn't given, then prepare_cached() will be used to
+prepare the statement handle and it will be cached.  If $cache is false
+then a normal prepare() will be used and the statement handle will be
+recompiled on every sql_*() call.  If you have a statement which changes
+a lot or is used very infrequently you might not want it cached.
 
-A new method is created for each statement you set up.  This new
-method is sql_$sql_name... so, as with set_db,
-Foo->set_sql("bar", ..., "foo"); will create a method called
-sql_bar() which uses the database connection from db_foo().
-
+A new method is created for each statement you set up.  This new method
+is "sql_$sql_name"... so, as with set_db(), Foo->set_sql("bar", ...,
+"foo"); will create a method called "sql_bar()" which uses the database
+connection from "db_foo()". Again, spaces in $sql_name will be translated
+into underscores ('_').
 The actual statement handle creation is held off until sql_* is first
 called on this name.
 
-Spaces in $sql_name will be translated into underscores ('_')
-
-To make up for the limitations of bind parameters, $statement can
-contain sprintf() style formatting (ie. %s and such) to allow
-dynamically generated SQL statements (so to get a real percent sign,
-use '%%').  See sql_* below for more details.
+To make up for the limitations of bind parameters, $statement can contain
+sprintf() style formatting (ie. %s and such) to allow dynamically
+generated SQL statements (so to get a real percent sign, use '%%').
+See sql_* below for more details.
 
 =cut
 
 sub set_sql {
     my($class, $sql_name, $statement, $db_name, $cache) = @_;
-    $cache = YES unless defined $cache;
+    $cache = 1 unless defined $cache;
 
     # DBI will take care of the rest better than I can.
-    _taint_check($class, $sql_name, $db_name);
+    $class->_taint_check($sql_name, $db_name);
 
     # ------------------------- sql_* closure ----------------------- #
     my $db_meth = $db_name;
@@ -430,7 +436,7 @@ sub set_sql {
     *{$class."::$sql_meth"} = 
       $class->_mk_sql_closure($sql_name, $statement, $db_meth, $cache);
 
-    return SUCCESS;
+    return 1;
 }
 
 
@@ -449,26 +455,13 @@ sub _mk_sql_closure {
         if ( !$sth or @_ ) {  # No $sth defined yet.
             # Maybe I can do this at compile-time.
             my $sql = '';
-            # Make sure we got something that looks like a 
-            # sprintf() string.
-            # XXX This is the only thing that uses a 5.005 feature
-            # XXX so I'm eliminating it.
-#                  assert( do { my $count = 0;
-#                              $count = () = $statement =~ m/(?<!%)%[^%]/g;
-#                              $count == @_ } ) if DEBUG;
 
             # Everything must pass through sprintf, regardless of if
             # @_ is empty.  This is to do proper '%%' translation.
             $sql = sprintf($statement, @_);
-
-            if( $cache ) {
-                $sth = $dbh->prepare_cached($sql);
-            }
-            else {
-                $sth = $dbh->prepare($sql);
-            }
-        }
-        else {          # $sth defined.
+            $sth = $cache ? $dbh->prepare_cached($sql)
+                          : $dbh->prepare($sql);
+        } else { 
             # Check to see if the handle is active.
             if( $sth->FETCH('Active') ) {
                 require Carp;
@@ -614,10 +607,10 @@ Alternatively, you may do:  $obj->db_Name->clear_cache;
 
 =cut
 
-sub clear_db_cache {
-    _unimplemented;
+sub clear_db_cache { 
+  warn "clear_db_cache is unimplemented";
+  return;
 }
-
 
 =item B<DBIwarn>
 
@@ -648,7 +641,7 @@ sub DBIwarn {
     require Carp;
     Carp::carp $errstr;
 
-    return SUCCESS;
+    return 1;
 }
 
 =back
@@ -692,7 +685,7 @@ sub commit {
     $rc = $obj->rollback;
     $rc = $obj->rollback(@db_names);
 
-Derived from $dbj->rollback, it acts just like Ima::DBI->commit,
+Derived from $dbh->rollback, this acts just like Ima::DBI->commit,
 except that it calls rollback().
 
 Alternatively, you may like to do:  $rc = $obj->db_Name->rollback;
@@ -712,9 +705,6 @@ sub rollback {
 ###################### DBI database handle subclass #######################
 
 package Ima::DBI::db;
-
-use Ima::DBI::utility;
-use Carp::Assert;
 
 use base qw(DBI::db);  # Uhh, I think that's right.
 
@@ -745,7 +735,7 @@ sub clear_cache {
     my $sql_cache = $self->{CachedKids};
     %$sql_cache = ();
 
-    return UNUSED;
+    return undef;
 }
 
 =back
@@ -765,9 +755,6 @@ DBI.
 package Ima::DBI::st;
 
 use base qw(DBI::st);
-
-use Ima::DBI::utility;
-use Carp::Assert;
 
 =pod
 
@@ -810,8 +797,6 @@ sub execute {
 
     my $rv;
 
-    my $orig_taint = $sth->{Taint};
-
     # Allow $sth->execute(\@param, \@cols) and 
     # $sth->execute(undef, \@cols) syntax.
     if( @_ == 2 and 
@@ -819,26 +804,34 @@ sub execute {
         ref $_[1] eq 'ARRAY' ) 
     {
         my($bind_params, $bind_cols) = @_;
-
-	# We're going to shut off tainting for execute() because I
-	# can't think of a good reason why a tainted bind param would
-	# be dangerous (in general) and its really obnoxious to have
-	# to detaint -all- your bind params.
-	$sth->{Taint} = 0;
-        $rv = $sth->SUPER::execute(@$bind_params);
-	$sth->{Taint} = $orig_taint;
+        $rv = $sth->_untaint_execute(@$bind_params);
         $sth->SUPER::bind_columns(@$bind_cols);
+    } else {
+        $sth->_disallow_references(@_);
+        $rv = $sth->_untaint_execute(@_);
     }
-    else {
-        # There should be no references
-        assert(!grep { ref $_ } @_) if DEBUG;
-	# Same as above.
-	$sth->{Taint} = 0;
-        $rv = $sth->SUPER::execute(@_);
-	$sth->{Taint} = $orig_taint;
-    }
-
     return $rv;
+}
+
+sub _disallow_references {
+  my $self = shift;
+  foreach (@_) {
+    next unless ref $_;
+    next if overload::Method($_,q{""});
+    next if overload::Method($_,q{0+});
+    die "Cannot call execute with a reference ($_)\n";
+  }
+}
+  
+# We're going to shut off tainting for execute() with bind params
+# because I can't think of a good reason why a tainted bind param would
+# be dangerous (in general) and its really obnoxious to have to detaint
+# -all- your bind params.
+
+sub _untaint_execute {
+  my $sth = shift;
+  local $sth->{Taint} = 0;
+  return $sth->SUPER::execute(@_);
 }
 
 =pod
@@ -988,11 +981,9 @@ sub fetchall_hash {
         WHERE   Country = ?
     SQL
 
-
     # rest of the class as usual.
 
-
-    package main:
+    package main;
 
     $obj = Foo->new;
 
@@ -1059,7 +1050,7 @@ is_connected() and is_prepared() first.
 
 But what?
 
-=item I seriously doubt its thread safe.
+=item I seriously doubt that it's thread safe.
 
 You can bet cupcackes to sno-cones that much havoc will be wrought if
 Ima::DBI is used in a threaded Perl.
@@ -1085,6 +1076,7 @@ connections are made, etc...
 
 Michael G Schwern <schwern@pobox.com>
 
+Now maintained by Tony Bowden <kasei@com>
 
 =head1 COPYRIGHT
 
@@ -1097,17 +1089,19 @@ as Perl itself.  IT COMES WITHOUT WARRANTY OF ANY KIND.
 
 =head1 THANKS MUCHLY
 
-    Tim Bunce, for enduring all my DBI questions and adding Taint,
-    prepare_cached and connect_cached methods to DBI.  It simplified
-    my job greatly!
+    Tim Bunce, for enduring many DBI questions and adding Taint,
+    prepare_cached and connect_cached methods to DBI, simplifying
+    this greatly!
 
-    Arena Networks, for effectively paying for me to finish writing
+    Arena Networks, for effectively paying for Mike to finish writing
     this module.
-
 
 =head1 SEE ALSO
 
-DBI
+L<DBI>. 
+
+You may also choose to check out L<Class::DBI> which hides most of this
+from view.
 
 =cut
 
