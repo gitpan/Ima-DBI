@@ -8,15 +8,12 @@ require Class::Data::Inheritable;
 use vars qw($VERSION @ISA);
 
 BEGIN {
-    $VERSION = '0.26';
+    $VERSION = '0.27';
 
     # We accidentally inherit AutoLoader::AUTOLOAD from DBI.  Send it to
     # the white hole.
     @ISA = qw(Class::WhiteHole DBI Class::Data::Inheritable);
 }
-
-# Magical subclassing magic off DBI.
-Ima::DBI->init_rootclass;
 
 # Some class data to store a per-class list of handles.
 Ima::DBI->mk_classdata('__Database_Names');
@@ -44,13 +41,6 @@ Ima::DBI - Database connection caching and organization
     Foo->set_sql($sql_name, $statement, $db_name, $cache);
 
     my @statement_names   = Foo->sql_names;
-
-    Foo->clear_db_cache;                *UNIMPLEMENTED*
-    Foo->clear_db_cache(@db_names);     *UNIMPLEMENTED*
-
-    Foo->clear_sql_cache;               *UNIMPLEMENTED*
-    Foo->clear_sql_cache(@sql_names);   *UNIMPLEMENTED*
-
 
     # Object methods.
     $dbh = $obj->db_*;      # Where * is the name of the db connection.
@@ -83,9 +73,6 @@ Ima::DBI - Database connection caching and organization
 
     my $rc = $obj->rollback;
     my $rc = $obj->rollback(@db_names);
-
-    $dbh->clear_cache;  *UNIMPLEMENTED*
-    $sth->clear_cache;  *UNIMPLEMENTED*
 
 
 =head1 DESCRIPTION
@@ -315,22 +302,10 @@ is held off until a prepare is attempted with this handle.
 
 sub _croak { my $self = shift; require Carp; Carp::croak(@_) }
 
-# NOT rigorous enough. But DBI itself takes care of most of the
-# important ones for us.
-sub _taint_check {
-  my $self = shift;
-  unless(eval { () = join('',@_), kill 0; 1; }) {
-    require Carp;
-    Carp::croak("Insecure dependency");
-  }
-  return;
-}
-
 sub set_db {
   my $class       = shift;
   my $db_name     = shift or $class->_croak("Need a db name");
      $db_name    =~ s/\s/_/g;
-     $class->_taint_check($db_name);
 
   my $data_source = shift or $class->_croak("Need a data source");
   my $user        = shift || "";
@@ -415,9 +390,6 @@ sub set_sql {
     my($class, $sql_name, $statement, $db_name, $cache) = @_;
     $cache = 1 unless defined $cache;
 
-    # DBI will take care of the rest better than I can.
-    $class->_taint_check($sql_name, $db_name);
-
     # ------------------------- sql_* closure ----------------------- #
     my $db_meth = $db_name;
     $db_meth =~ s/\s/_/g;
@@ -453,11 +425,10 @@ sub _mk_sql_closure {
         # Calling prepare_cached over and over again is also expensive.
         # Again, we co-opt some of prepare_cached's functionality.
         if ( !$sth or @_ ) {  # No $sth defined yet.
-            # Maybe I can do this at compile-time.
             my $sql = '';
 
-            # Everything must pass through sprintf, regardless of if
-            # @_ is empty.  This is to do proper '%%' translation.
+            # Everything must pass through sprintf, even if @_ is empty.  
+            # This is to do proper '%%' translation.
             $sql = sprintf($statement, @_);
             $sth = $cache ? $dbh->prepare_cached($sql)
                           : $dbh->prepare($sql);
@@ -506,16 +477,13 @@ These both work as either class or object methods.
 
 =cut
 
-sub db_names {
-    return @{$_[0]->__Database_Names || []};
-}
+sub db_names { @{$_[0]->__Database_Names || []} }
 
 sub db_handles {
-    my($self, @db_names) = @_;
-    @db_names = $self->db_names unless @db_names;
-    return map { $self->$_() } map { 'db_'.$_ } @db_names;
+  my($self, @db_names) = @_;
+  @db_names = $self->db_names unless @db_names;
+  return map $self->$_(), map "db_$_", @db_names;
 }
-
 
 =item B<sql_names>
 
@@ -529,10 +497,7 @@ arguments to pass in.
 
 =cut
 
-sub sql_names {
-    return @{$_[0]->__Statement_Names || []};
-}
-
+sub sql_names { @{$_[0]->__Statement_Names || []} }
 
 =back
 
@@ -585,32 +550,6 @@ will be spared the worst.
 
 It is recommended you only use this in cases where bind parameters
 will not work.
-
-=item B<clear_db_cache>         B<*UNIMPLEMENTED*>
-
-    Foo->clear_db_cache;
-    Foo->clear_db_cache(@db_names);
-
-Ima::DBI uses the DBI->connect_cached to cache open database handles.
-For whatever reason you might want to clear this cache out and start
-over again.
-
-A call to clear_db_cache with no arguments deletes all database
-handles out of the cache and all associated statement handles.
-Otherwise it only deletes those handles listed in @db_names (and their
-associated statement handles).
-
-Note that clearing from the cache does not necessarily destroy the
-database handle.  Something else might have a reference to it.
-
-Alternatively, you may do:  $obj->db_Name->clear_cache;
-
-=cut
-
-sub clear_db_cache { 
-  warn "clear_db_cache is unimplemented";
-  return;
-}
 
 =item B<DBIwarn>
 
@@ -673,9 +612,8 @@ If all the commits succeeded it returns true, false otherwise.
 =cut
 
 sub commit {
-    my($self, @db_names) = @_;
-
-    return grep !$_, map $_->commit, $self->db_handles(@db_names) ? 0 : 1;
+  my($self, @db_names) = @_;
+  return grep(!$_, map $_->commit, $self->db_handles(@db_names)) ? 0 : 1;
 }
 
 =pod
@@ -695,9 +633,8 @@ If all the rollbacks succeeded it returns true, false otherwise.
 =cut
 
 sub rollback {
-    my($self, @db_names) = @_;
-
-    return grep !$_, map $_->rollback, $self->db_handles(@db_names) ? 0 : 1;
+  my($self, @db_names) = @_;
+  return grep(!$_, map $_->rollback, $self->db_handles(@db_names)) ? 0 : 1;
 }
 
 
@@ -705,40 +642,13 @@ sub rollback {
 ###################### DBI database handle subclass #######################
 
 package Ima::DBI::db;
+use base 'DBI::db';
 
-use base qw(DBI::db);  # Uhh, I think that's right.
+############################## Ima::DBI::st ##################################
+###################### DBI statement handle subclass #########################
 
-=pod
-
-=item B<clear_cache>    *UNIMPLEMENTED*
-
-    $dbh->clear_cache;
-
-Provides a mechanism to clear a given database handle from the cache.
-All statement handles based on this handle will also be removed.
-
-=cut
-
-sub clear_cache {
-    my($self) = shift;
-    my $cache = $self->{Driver}{CachedKids};
-
-    # Not the most efficient thing in the universe, but the cache should
-    # be small.
-    while(my($k, $dbh) = each %$cache) {
-        if( $dbh eq $self ) {
-            delete $cache->{$k};
-            last;
-        }
-    }
-
-    my $sql_cache = $self->{CachedKids};
-    %$sql_cache = ();
-
-    return undef;
-}
-
-=back
+package Ima::DBI::st;
+use base 'DBI::st';
 
 =head2 Modified statement handle methods
 
@@ -746,17 +656,6 @@ Ima::DBI overrides the normal DBI statement handle with its own,
 slightly modified, version.  Don't worry, it inherits from DBI::st, so
 anything not explicitly mentioned here will work just like in normal
 DBI.
-
-=cut
-
-############################## Ima::DBI::st ##################################
-###################### DBI statement handle subclass #########################
-
-package Ima::DBI::st;
-
-use base qw(DBI::st);
-
-=pod
 
 =over 4
 
@@ -833,32 +732,6 @@ sub _untaint_execute {
   local $sth->{Taint} = 0;
   return $sth->SUPER::execute(@_);
 }
-
-=pod
-
-=item B<clear_cache>    *UNIMPLEMENTED*
-
-    $sth->clear_cache;
-
-Provides a mechanism to clear a given statement handle from the cache.
-
-=cut
-
-sub clear_cache {
-    my($self) = shift;
-    my $cache = $self->{Database}{CachedKids};
-
-    # Not the most efficient thing in the universe, but the cache should
-    # be small.
-    while(my($k, $sth) = each %$cache) {
-        if( $sth eq $self ) {
-            delete $cache->{$k};
-            last;
-        }
-    }
-}
-
-=pod
 
 =back
 
@@ -1018,37 +891,6 @@ sub fetchall_hash {
 =head1 TODO, Caveat, BUGS, etc....
 
 =over 4
-
-=item Using undocumented features of DBI
-
-Using DBI->init_rootclass to pull of subclassing.  This is currently
-an undocumented method (this should change soon).
-
-=item tainting may be too broad
-
-Having Ima::DBI not accept any tainted data at all is probably too
-general, but I'd rather be too strict to start than be too lax and try
-to restrict later.  In the future, certain methods may accept tainted
-data.
-
-This is now a joint issue between DBI and Ima::DBI (well, more like
-a master/slave issue.)
-
-=item Need a way to tell if a handle is already set up.
-
-I need something like is_connected() and is_prepared() to tell if the
-handle for a bit of SQL or a db has already been connected or
-prepared.  This is mostly for internal use, but I'd imagine people
-will find uses for it.
-
-=item clear_cache, clear_db_cache and clear_sql_cache still unimplemented
-
-Having some trouble getting those to work.  I need to implement
-is_connected() and is_prepared() first.
-
-=item db_* should take arguments
-
-But what?
 
 =item I seriously doubt that it's thread safe.
 

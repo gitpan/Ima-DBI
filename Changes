@@ -1,5 +1,12 @@
 Revision history for Perl extension Ima::DBI.
 
+0.27  Sat Feb 16 11:55:23 GMT 2002
+    - fix precedence bug with commit / rollback
+        [thanks to Tim Ayers]
+    - Subclassing DBI is now greatly improved thanks to changes
+        in DBI itself.
+    - DBI now handles all taint issues for us directly
+
 0.26  Sat Oct  6 12:38:21 BST 2001
    [now maintainted by Tony Bowden]
 

@@ -17,7 +17,7 @@ WriteMakefile(
   NAME          => 'Ima::DBI',
   VERSION_FROM  => 'lib/Ima/DBI.pm', 
   PREREQ_PM     => { 
-    DBI                      => 1.09,
+    DBI                      => 1.20,
     Class::WhiteHole         => 0.03,
     Class::Data::Inheritable => 0.02,
     Test::More               => 0.18,
