@@ -18,7 +18,6 @@ WriteMakefile(
 	VERSION_FROM => 'lib/Ima/DBI.pm',
 	PREREQ_PM    => {
 		'DBI'                      => 1.20,
-		'Class::WhiteHole'         => 0.03,
 		'Class::Data::Inheritable' => 0.02,
 		'DBIx::ContextualFetch'    => 1.00,
 		'Test::More'               => 0.18,
