@@ -1,6 +1,6 @@
 package Ima::DBI;
 
-$VERSION = '0.34';
+$VERSION = '0.35';
 
 use strict;
 use base 'Class::Data::Inheritable';
@@ -250,9 +250,9 @@ underscores: '_')
 
 %attr is combined with a set of defaults (RaiseError => 1, AutoCommit
 => 0, PrintError => 0, Taint => 1).  This is a better default IMHO,
-however it does give databases without transactions (such as MySQL) a
-hard time.  Be sure to turn AutoCommit back on if your database does
-not support transactions.
+however it does give databases without transactions (such as MySQL when
+used with the default MyISAM table type) a hard time.  Be sure to turn 
+AutoCommit back on if your database does not support transactions.
 
 The actual database handle creation (and thus the database connection)
 is held off until a prepare is attempted with this handle.
@@ -306,14 +306,31 @@ sub _remember_handle {
 }
 
 sub _mk_db_closure {
-	my ($class, @connection) = @_;
+	my ($class, $dsn, $user, $pass, $attr) = @_;
+        $attr ||= {};
+    
 	my $dbh;
+	my $process_id = $$;
 	return sub {
-		unless ($dbh && $dbh->FETCH('Active') && $dbh->ping) {
-			$dbh = DBI->connect_cached(@connection);
+		# set the PID in a private cache key to prevent us
+		# from sharing one with the parent after fork.  This
+		# is better than disconnecting the existing $dbh since
+		# the parent may still need the connection open.  Note
+		# that forking code also needs to set InactiveDestroy
+		# on all open handles in the child or the connection
+		# will be broken during DESTROY.
+		$attr->{private_cache_key_pid} = $$;
+
+                # reopen if this is a new process or if the connection
+                # is bad
+		if ($process_id != $$ or 
+                    not ($dbh && $dbh->FETCH('Active') && $dbh->ping)) {
+                    $dbh = DBI->connect_cached($dsn, $user, $pass, $attr);
+                    $process_id = $$;
 		}
 		return $dbh;
 	};
+
 }
 
 =head2 set_sql
@@ -634,6 +651,35 @@ sub rollback {
         warn "DBI failure:  $@";    
     }
 
+=head1 USE WITH MOD_PERL, FASTCGI, ETC.
+
+To help with use in forking environments, Ima::DBI database handles keep 
+track of the PID of the process they were openend under.  If they notice 
+a change (because you forked a new process), a new handle will be opened 
+in the new process.  This prevents a common problem seen in environments 
+like mod_perl where people would open a handle in the parent process and 
+then run into trouble when they try to use it from a child process.
+
+Because Ima::DBI handles keeping database connections persistent and 
+prevents problems with handles openend before forking, it is not 
+necessary to use Apache::DBI when using Ima::DBI.  However, there is 
+one feature of Apache::DBI which you will need in a mod_perl or FastCGI 
+environment, and that's the automatic rollback it does at the end of each 
+request.  This rollback provides safety from transactions left hanging 
+when some perl code dies -- a serious problem which could grind your 
+database to a halt with stale locks.
+
+To replace this feature on your own under mod_perl, you can add something 
+like this in a handler at any phase of the request:
+
+   $r->push_handlers(PerlCleanupHandler => sub {
+       MyImaDBI->rollback();
+   });
+
+Here C<MyImaDBI> is your subclass of Ima::DBI.  You could also make this 
+into an actual module and set the PerlCleanupHandler from your httpd.conf.
+A similar approach should work in any long-running environment which has 
+a hook for running some code at the end of each request.
 
 =head1 TODO, Caveat, BUGS, etc....
 
@@ -660,9 +706,9 @@ connections are made, etc...
 
 =back
 
-=head1 MAINTAINER
+=head1 MAINTAINERS
 
-Tony Bowden <tony@tmtm.com>
+Tony Bowden <tony@tmtm.com> and Perrin Harkins <perrin@elem.com>
 
 =head1 ORIGINAL AUTHOR 
 

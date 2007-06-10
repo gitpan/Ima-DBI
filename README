@@ -197,9 +197,9 @@ Class Methods
 
     %attr is combined with a set of defaults (RaiseError => 1, AutoCommit =>
     0, PrintError => 0, Taint => 1). This is a better default IMHO, however
-    it does give databases without transactions (such as MySQL) a hard time.
-    Be sure to turn AutoCommit back on if your database does not support
-    transactions.
+    it does give databases without transactions (such as MySQL when used
+    with the default MyISAM table type) a hard time. Be sure to turn
+    AutoCommit back on if your database does not support transactions.
 
     The actual database handle creation (and thus the database connection)
     is held off until a prepare is attempted with this handle.
@@ -418,6 +418,36 @@ EXAMPLE
             warn "DBI failure:  $@";    
         }
 
+USE WITH MOD_PERL, FASTCGI, ETC.
+    To help with use in forking environments, Ima::DBI database handles keep
+    track of the PID of the process they were openend under. If they notice
+    a change (because you forked a new process), a new handle will be opened
+    in the new process. This prevents a common problem seen in environments
+    like mod_perl where people would open a handle in the parent process and
+    then run into trouble when they try to use it from a child process.
+
+    Because Ima::DBI handles keeping database connections persistent and
+    prevents problems with handles openend before forking, it is not
+    necessary to use Apache::DBI when using Ima::DBI. However, there is one
+    feature of Apache::DBI which you will need in a mod_perl or FastCGI
+    environment, and that's the automatic rollback it does at the end of
+    each request. This rollback provides safety from transactions left
+    hanging when some perl code dies -- a serious problem which could grind
+    your database to a halt with stale locks.
+
+    To replace this feature on your own under mod_perl, you can add
+    something like this in a handler at any phase of the request:
+
+       $r->push_handlers(PerlCleanupHandler => sub {
+           MyImaDBI->rollback();
+       });
+
+    Here "MyImaDBI" is your subclass of Ima::DBI. You could also make this
+    into an actual module and set the PerlCleanupHandler from your
+    httpd.conf. A similar approach should work in any long-running
+    environment which has a hook for running some code at the end of each
+    request.
+
 TODO, Caveat, BUGS, etc....
     I seriously doubt that it's thread safe.
         You can bet cupcackes to sno-cones that much havoc will be wrought
@@ -434,8 +464,8 @@ TODO, Caveat, BUGS, etc....
         out SQL statements as they are made as well as mention when database
         connections are made, etc...
 
-MAINTAINER
-    Tony Bowden <tony@tmtm.com>
+MAINTAINERS
+    Tony Bowden <tony@tmtm.com> and Perrin Harkins <perrin@elem.com>
 
 ORIGINAL AUTHOR
     Michael G Schwern <schwern@pobox.com>

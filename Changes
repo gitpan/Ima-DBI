@@ -1,5 +1,9 @@
 Revision history for Perl extension Ima::DBI.
 
+0.35 Sun Jun 10 16:36:07 EST 2007
+		- Add checking of PID in database handles to prevent trouble
+		  in forked environments (Perrin Harkins and Sam Tregar)
+
 0.34 Mon Sep  5 09:10:37 UTC 2005
 		- Remove Class::WhiteHole from PREREQs (Alexey Tourbin)
 
